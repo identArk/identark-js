@@ -19,16 +19,34 @@
  * ```
  */
 
-import type { BaseLanguageModelInput } from "@langchain/core/language_models/base";
-import { BaseChatModel, type BaseChatModelParams } from "@langchain/core/language_models/chat_models";
-import { AIMessage, type BaseMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
+import {
+  BaseChatModel,
+  type BaseChatModelCallOptions,
+  type BaseChatModelParams,
+} from "@langchain/core/language_models/chat_models";
+import {
+  AIMessage,
+  AIMessageChunk,
+  type BaseMessage,
+  HumanMessage,
+  SystemMessage,
+  ToolMessage,
+} from "@langchain/core/messages";
 import { ChatGenerationChunk, type ChatResult } from "@langchain/core/outputs";
 import { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
-import type { AgentGateway, LLMResponse, Message, StreamChunk } from "../gateway.js";
-import { Role } from "../types.js";
+import type { AgentGateway } from "../gateway.js";
+import { type LLMResponse, type Message, Role, type StreamChunk } from "../types.js";
 
 export interface IdentArkChatModelInput extends BaseChatModelParams {
   gateway: AgentGateway;
+}
+
+/**
+ * Call options accepted per invocation (tools in OpenAI function format).
+ */
+export interface IdentArkCallOptions extends BaseChatModelCallOptions {
+  tools?: Array<Record<string, unknown>>;
+  tool_choice?: string | Record<string, unknown>;
 }
 
 /**
@@ -59,12 +77,14 @@ function lcToIdentark(messages: BaseMessage[]): Message[] {
  * Convert an IdentArk LLMResponse to a LangChain AIMessage.
  */
 function identarkToLc(response: LLMResponse): AIMessage {
-  const msg = new AIMessage(response.message.content ?? "");
+  const raw = response.message.content;
+  const text = typeof raw === "string" ? raw : JSON.stringify(raw ?? "");
+  const msg = new AIMessage(text);
   // Attach usage metadata if available
   if (response.usage) {
-    (msg as any).usage_metadata = {
-      input_tokens: response.usage.prompt_tokens ?? 0,
-      output_tokens: response.usage.completion_tokens ?? 0,
+    (msg as unknown as Record<string, unknown>).usage_metadata = {
+      input_tokens: response.usage.input_tokens ?? 0,
+      output_tokens: response.usage.output_tokens ?? 0,
       total_tokens: response.usage.total_tokens ?? 0,
     };
   }
@@ -78,25 +98,28 @@ function identarkToLc(response: LLMResponse): AIMessage {
  * (local dev) and ControlPlaneGateway (production) without changing
  * your LangChain code.
  */
-export class IdentArkChatModel extends BaseChatModel<IdentArkChatModelInput> {
-  lc_namespace = ["identark", "integrations", "langchain"];
+export class IdentArkChatModel extends BaseChatModel<IdentArkCallOptions> {
+  override lc_namespace = ["identark", "integrations", "langchain"];
 
   gateway: AgentGateway;
+
+  /** Tools bound via bindTools(); used when the call options carry none. */
+  private boundTools?: Array<Record<string, unknown>>;
 
   constructor(fields: IdentArkChatModelInput) {
     super(fields);
     this.gateway = fields.gateway;
   }
 
-  get lc_secrets(): Record<string, string> | undefined {
+  override get lc_secrets(): Record<string, string> | undefined {
     return undefined;
   }
 
-  get _llmType(): string {
+  override _llmType(): string {
     return "identark";
   }
 
-  get _modelType(): string {
+  override _modelType(): string {
     return "identark_chat";
   }
 
@@ -106,14 +129,15 @@ export class IdentArkChatModel extends BaseChatModel<IdentArkChatModelInput> {
   async _generate(
     messages: BaseMessage[],
     options: this["ParsedCallOptions"],
-    runManager?: CallbackManagerForLLMRun,
+    _runManager?: CallbackManagerForLLMRun,
   ): Promise<ChatResult> {
     const identarkMessages = lcToIdentark(messages);
+    const tools = options.tools ?? this.boundTools;
 
     const response: LLMResponse = await this.gateway.invokeLlm(
       identarkMessages,
-      options.tools as any,
-      options.tool_choice as any,
+      tools ?? undefined,
+      options.tool_choice ?? "auto",
     );
 
     const message = identarkToLc(response);
@@ -132,24 +156,25 @@ export class IdentArkChatModel extends BaseChatModel<IdentArkChatModelInput> {
   /**
    * Streaming support via async iterator.
    */
-  async *_streamResponseChunks(
+  override async *_streamResponseChunks(
     messages: BaseMessage[],
     options: this["ParsedCallOptions"],
     runManager?: CallbackManagerForLLMRun,
   ): AsyncGenerator<ChatGenerationChunk> {
     const identarkMessages = lcToIdentark(messages);
+    const tools = options.tools ?? this.boundTools;
 
     const stream = this.gateway.invokeLlmStream(
       identarkMessages,
-      options.tools as any,
-      options.tool_choice as any,
+      tools ?? undefined,
+      options.tool_choice ?? "auto",
     );
 
     for await (const chunk of stream) {
       const text = (chunk as StreamChunk).content ?? "";
       const generationChunk = new ChatGenerationChunk({
         text,
-        message: new AIMessage(text),
+        message: new AIMessageChunk(text),
       });
 
       yield generationChunk;
@@ -162,18 +187,20 @@ export class IdentArkChatModel extends BaseChatModel<IdentArkChatModelInput> {
 
   /**
    * Bind tools to the model (required for tool-calling agents).
+   *
+   * Returns a new IdentArkChatModel carrying the tools; the original
+   * instance is not mutated.
    */
-  bindTools(tools: any[], kwargs?: any): this {
-    return this.bind({
-      tools: tools.map((t) => ({
-        type: "function",
-        function: {
-          name: t.name,
-          description: t.description,
-          parameters: t.schema ?? t.parameters,
-        },
-      })),
-      ...kwargs,
-    }) as this;
+  override bindTools(tools: Array<Record<string, unknown>>, _kwargs?: Partial<IdentArkCallOptions>): IdentArkChatModel {
+    const bound = new IdentArkChatModel({ gateway: this.gateway });
+    bound.boundTools = tools.map((t) => ({
+      type: "function",
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.schema ?? t.parameters,
+      },
+    }));
+    return bound;
   }
 }

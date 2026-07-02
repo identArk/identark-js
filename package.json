@@ -44,18 +44,19 @@
   "author": "Gold Okpa",
   "license": "MIT",
   "peerDependencies": {
-    "openai": "^4.0.0 || ^5.0.0",
-    "@anthropic-ai/sdk": "^0.20.0"
+    "@anthropic-ai/sdk": "^0.20.0",
+    "openai": "^4.0.0 || ^5.0.0"
   },
   "peerDependenciesOptional": true,
   "devDependencies": {
+    "@langchain/core": "^1.2.1",
     "@types/node": "^20.0.0",
-    "typescript": "^5.4.0",
-    "vitest": "^1.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0"
+    "typescript": "^5.4.0",
+    "vitest": "^1.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
