@@ -1,0 +1,13 @@
+src/
+tests/
+*.test.ts
+*.test.js
+vitest.config.ts
+tsconfig.json
+.eslintrc.json
+.github/
+node_modules/
+coverage/
+dist/*.map
+.gitignore
+.env*

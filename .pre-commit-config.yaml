@@ -1,0 +1,60 @@
+# Pre-commit hooks for IdentArk TypeScript SDK
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        name: Scan for secrets (gitleaks)
+        description: Detect hardcoded secrets using Gitleaks
+        entry: gitleaks protect --verbose --redact --staged
+        language: golang
+        pass_filenames: false
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: detect-private-key
+        name: Detect private keys
+        description: Checks for the existence of private keys
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+        name: Check for merge conflict markers
+      - id: check-json
+        name: Validate JSON files
+      - id: check-yaml
+        name: Validate YAML files
+      - id: end-of-file-fixer
+        name: Fix end of file
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+
+  # ESLint for TypeScript
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.12.0
+    hooks:
+      - id: eslint
+        name: ESLint
+        entry: eslint
+        language: node
+        files: \.(ts|tsx)$
+        additional_dependencies:
+          - eslint@^8.57.0
+          - '@typescript-eslint/eslint-plugin@^8.8.0'
+          - '@typescript-eslint/parser@^8.8.0'
+          - eslint-config-prettier@^9.1.0
+
+  # Prettier for formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        name: Prettier formatter
+        types_or: [javascript, jsx, ts, tsx, json, yaml, markdown]
+        additional_dependencies:
+          - prettier@^3.3.3

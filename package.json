@@ -1,0 +1,63 @@
+{
+  "name": "@identark/sdk",
+  "version": "1.0.0",
+  "description": "The AgentGateway Protocol — secure, scalable agent execution infrastructure",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./integrations/langchain": {
+      "types": "./dist/integrations/langchain.d.ts",
+      "import": "./dist/integrations/langchain.js",
+      "require": "./dist/integrations/langchain.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SECURITY.md",
+    "LICENSE",
+    "examples"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:cjs": "tsc --module commonjs --outDir dist && for f in dist/*.js; do mv \"$f\" \"${f%.js}.cjs\"; done",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src --max-warnings 0",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "identark",
+    "agent",
+    "gateway",
+    "llm",
+    "ai",
+    "sdk"
+  ],
+  "author": "Gold Okpa",
+  "license": "MIT",
+  "peerDependencies": {
+    "openai": "^4.0.0 || ^5.0.0",
+    "@anthropic-ai/sdk": "^0.20.0"
+  },
+  "peerDependenciesOptional": true,
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.0.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
