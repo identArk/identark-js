@@ -15,6 +15,11 @@
       "types": "./dist/integrations/langchain.d.ts",
       "import": "./dist/integrations/langchain.js",
       "require": "./dist/integrations/langchain.cjs"
+    },
+    "./integrations/vercel": {
+      "types": "./dist/integrations/vercel.d.ts",
+      "import": "./dist/integrations/vercel.js",
+      "require": "./dist/integrations/vercel.cjs"
     }
   },
   "files": [
