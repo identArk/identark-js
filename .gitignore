@@ -1,6 +1,6 @@
 # Dependencies
 node_modules/
-package-lock.json
+# package-lock.json is committed — CI uses `npm ci`, which requires it.
 yarn.lock
 pnpm-lock.yaml
 
@@ -35,3 +35,5 @@ yarn-error.log*
 # Temporary
 tmp/
 temp/
+# Vitest writes transient compiled-config files next to vitest.config.ts
+vitest.config.ts.timestamp-*.mjs
