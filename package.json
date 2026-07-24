@@ -34,7 +34,7 @@
     "build:cjs": "tsc --module commonjs --outDir dist && for f in dist/*.js; do mv \"$f\" \"${f%.js}.cjs\"; done",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "test:coverage": "vitest --coverage",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint src --max-warnings 0",
     "dev": "tsc --watch"
   },
@@ -61,7 +61,8 @@
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.0.0"
+    "vitest": "^1.0.0",
+    "@vitest/coverage-v8": "^1.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
