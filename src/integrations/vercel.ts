@@ -12,8 +12,8 @@
  * @example
  * ```typescript
  * import { generateText } from "ai";
- * import { DirectGateway } from "@identark/sdk";
- * import { identark } from "@identark/sdk/integrations/vercel";
+ * import { DirectGateway } from "identark";
+ * import { identark } from "identark/integrations/vercel";
  *
  * const gateway = new DirectGateway(openaiClient, "gpt-4o");
  * const { text } = await generateText({

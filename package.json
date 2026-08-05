@@ -1,7 +1,15 @@
 {
-  "name": "@identark/sdk",
+  "name": "identark",
   "version": "1.0.0",
   "description": "The AgentGateway Protocol — secure, scalable agent execution infrastructure",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/identArk/identark-js.git"
+  },
+  "homepage": "https://github.com/identArk/identark-js#readme",
+  "bugs": {
+    "url": "https://github.com/identArk/identark-js/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

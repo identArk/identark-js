@@ -4,8 +4,8 @@
  * Use IdentArk's credential-isolated gateway inside any LangChain chain.
  */
 
-import { DirectGateway } from "@identark/sdk";
-import { IdentArkChatModel } from "@identark/sdk/integrations/langchain";
+import { DirectGateway } from "identark";
+import { IdentArkChatModel } from "identark/integrations/langchain";
 import OpenAI from "openai";
 import { HumanMessage } from "@langchain/core/messages";
 

@@ -4,7 +4,7 @@
  * Shows how to create a gateway and execute an agent task.
  */
 
-import { DirectGateway } from "@identark/sdk";
+import { DirectGateway } from "identark";
 import OpenAI from "openai";
 
 // Create a direct gateway with your OpenAI client

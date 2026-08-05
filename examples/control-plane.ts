@@ -4,7 +4,7 @@
  * Connect to the IdentArk cloud control plane for production deployments.
  */
 
-import { ControlPlaneGateway } from "@identark/sdk";
+import { ControlPlaneGateway } from "identark";
 
 const gateway = new ControlPlaneGateway({
   apiKey: process.env.IDENTARK_API_KEY!,
