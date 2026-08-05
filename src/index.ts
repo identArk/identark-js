@@ -71,10 +71,18 @@ export {
 export { MockGateway } from "./testing/mock-gateway.js";
 
 // Integrations
-export { IdentArkChatModel } from "./integrations/langchain.js";
+//
+// Deliberately NOT re-exported here. Each integration imports its framework
+// (@langchain/core, ai, ...) at module scope, and ESM resolves imports
+// eagerly — so re-exporting them from this barrel made `import { DirectGateway }
+// from "identark"` fail with ERR_MODULE_NOT_FOUND for anyone who had not also
+// installed LangChain. Import them from their own subpath instead:
+//
+//   import { IdentArkChatModel } from "identark/integrations/langchain";
+//   import { identark }          from "identark/integrations/vercel";
 
 // Metadata
-export const version = "1.0.0";
+export const version = "1.0.1";
 export const author = "Gold Okpa";
 export const license = "MIT";
 
