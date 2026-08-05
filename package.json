@@ -1,6 +1,6 @@
 {
   "name": "identark",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "The AgentGateway Protocol — secure, scalable agent execution infrastructure",
   "repository": {
     "type": "git",
@@ -16,19 +16,17 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./dist/index.js"
     },
     "./integrations/langchain": {
       "types": "./dist/integrations/langchain.d.ts",
-      "import": "./dist/integrations/langchain.js",
-      "require": "./dist/integrations/langchain.cjs"
+      "import": "./dist/integrations/langchain.js"
     },
     "./integrations/vercel": {
       "types": "./dist/integrations/vercel.d.ts",
-      "import": "./dist/integrations/vercel.js",
-      "require": "./dist/integrations/vercel.cjs"
-    }
+      "import": "./dist/integrations/vercel.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -39,7 +37,6 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:cjs": "tsc --module commonjs --outDir dist && for f in dist/*.js; do mv \"$f\" \"${f%.js}.cjs\"; done",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -58,9 +55,20 @@
   "license": "MIT",
   "peerDependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
-    "openai": "^4.0.0 || ^5.0.0"
+    "openai": "^4.0.0 || ^5.0.0",
+    "@langchain/core": "^1.0.0"
   },
-  "peerDependenciesOptional": true,
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    },
+    "@langchain/core": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@langchain/core": "^1.2.1",
     "@types/node": "^20.0.0",
@@ -73,6 +81,6 @@
     "@vitest/coverage-v8": "^1.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18"
   }
 }
