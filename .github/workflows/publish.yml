@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Lets the job mint an OIDC token. npm exchanges that for short-lived
+      # publish rights, and it signs the provenance attestation. Without it,
+      # trusted publishing fails with a missing-token error.
       id-token: write
     steps:
       - uses: actions/checkout@v4
@@ -17,8 +20,14 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 22.x
           registry-url: 'https://registry.npmjs.org'
+
+      # The npm bundled with Node 22 predates OIDC trusted publishing, which
+      # needs npm >= 11.5.1. Without this the publish step looks for a token
+      # instead and fails with ENEEDAUTH.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci
@@ -32,7 +41,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # No NODE_AUTH_TOKEN, deliberately. Auth comes from the OIDC token above,
+      # exchanged with npm because this repo + workflow are registered as a
+      # Trusted Publisher for the `identark` package. Nothing secret is stored
+      # in the repo, so there is no token to leak, rotate, or have restricted
+      # by npm's 2FA-bypass changes. Provenance is attached automatically.
       - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
