@@ -1,4 +1,4 @@
-# @identark/sdk
+# identark
 
 The AgentGateway Protocol — secure, scalable agent execution infrastructure.
 
@@ -21,7 +21,7 @@ A TypeScript SDK for building agents that hold zero secrets and maintain zero st
 ## Installation
 
 ```bash
-npm install @identark/sdk
+npm install identark
 
 # Optional peer dependencies for type hints
 npm install --save-peer openai @anthropic-ai/sdk
@@ -32,7 +32,7 @@ npm install --save-peer openai @anthropic-ai/sdk
 ### Local Development with OpenAI
 
 ```typescript
-import { DirectGateway, Message, Role } from "@identark/sdk";
+import { DirectGateway, Message, Role } from "identark";
 import { OpenAI } from "openai";
 
 const gateway = new DirectGateway(
@@ -52,7 +52,7 @@ console.log(`Cost: $${response.cost_usd.toFixed(4)}`);
 ### Local Development with Anthropic
 
 ```typescript
-import { DirectGateway, Role } from "@identark/sdk";
+import { DirectGateway, Role } from "identark";
 import { Anthropic } from "@anthropic-ai/sdk";
 
 const gateway = new DirectGateway(
@@ -68,7 +68,7 @@ const response = await gateway.invokeLlm([
 ### Production with IdentArk Control Plane
 
 ```typescript
-import { ControlPlaneGateway, Role } from "@identark/sdk";
+import { ControlPlaneGateway, Role } from "identark";
 
 // Auto-detects from env vars:
 // - IDENTARK_SESSION_TOKEN (inside sandbox)
@@ -168,7 +168,7 @@ console.log(`Session total: $${totalCost.toFixed(4)}`);
 ### Testing with MockGateway
 
 ```typescript
-import { MockGateway, Role, LLMResponse } from "@identark/sdk";
+import { MockGateway, Role, LLMResponse } from "identark";
 
 const mockResponse: LLMResponse = {
   message: { role: Role.ASSISTANT, content: "Mocked response" },
@@ -325,7 +325,7 @@ import {
   ContentPolicyError,
   PathNotAllowedError,
   ConfigurationError
-} from "@identark/sdk";
+} from "identark";
 
 try {
   const response = await gateway.invokeLlm([msg]);

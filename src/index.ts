@@ -1,5 +1,5 @@
 /**
- * @identark/sdk
+ * identark
  * ~~~~~~~~~~~~~
  * The AgentGateway Protocol — secure, scalable agent execution infrastructure.
  *
@@ -7,7 +7,7 @@
  *
  * ```typescript
  * // Local development
- * import { DirectGateway, Message, Role } from "@identark/sdk";
+ * import { DirectGateway, Message, Role } from "identark";
  *
  * const gateway = new DirectGateway({
  *   llmClient: new OpenAI(),
@@ -19,7 +19,7 @@
  * ]);
  *
  * // Production — two line change, agent code identical
- * import { ControlPlaneGateway } from "@identark/sdk";
+ * import { ControlPlaneGateway } from "identark";
  * const gateway = new ControlPlaneGateway();  // auto-detects env vars in sandbox
  * ```
  *

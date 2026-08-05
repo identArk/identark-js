@@ -7,9 +7,9 @@
  *
  * @example
  * ```typescript
- * import { DirectGateway } from "@identark/sdk";
+ * import { DirectGateway } from "identark";
  * import { OpenAI } from "openai";
- * import { IdentArkChatModel } from "@identark/sdk/integrations/langchain";
+ * import { IdentArkChatModel } from "identark/integrations/langchain";
  * import { HumanMessage } from "@langchain/core/messages";
  *
  * const gateway = new DirectGateway(new OpenAI(), "gpt-4o");
