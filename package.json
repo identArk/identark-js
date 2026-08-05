@@ -41,7 +41,8 @@
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src --max-warnings 0",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "version": "node scripts/sync-version.mjs && git add src/index.ts"
   },
   "keywords": [
     "identark",
