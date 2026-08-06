@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/identArk/identark-js/main/assets/logo.jpg" alt="IdentArk" width="360">
+</p>
+
 # identark
 
 The AgentGateway Protocol — secure, scalable agent execution infrastructure.
