@@ -45,6 +45,7 @@ export {
   type ToolCall,
   type ToolFunction,
   type Function, // Deprecated: use ToolFunction
+  type CredentialSession,
   messageToOpenAiDict,
 } from "./types.js";
 

@@ -255,6 +255,36 @@ describe("ControlPlaneGateway", () => {
     });
   });
 
+  describe("resolveCredential", () => {
+    beforeEach(() => {
+      process.env.IDENTARK_API_KEY = "test-key";
+      process.env.IDENTARK_CONTROL_PLANE_URL = "http://localhost:3000";
+    });
+
+    it("exposes structured credential fields on the returned session", async () => {
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          name: "postgres",
+          path: "prod/postgres",
+          value: '{"password":"not-logged"}',
+          type: "postgres",
+          kind: "database",
+          category: "database",
+          fields: { host: "db.internal", username: "agent", password: "not-logged", database: "prod" },
+        }),
+      });
+
+      const gateway = new ControlPlaneGateway();
+      const session = await gateway.resolveCredential("prod/postgres");
+
+      expect(session.kind).toBe("database");
+      expect(session.fields).toEqual({
+        host: "db.internal", username: "agent", password: "not-logged", database: "prod",
+      });
+    });
+  });
+
   describe("persistMessages", () => {
     beforeEach(() => {
       process.env.IDENTARK_API_KEY = "test-key";

@@ -15,6 +15,7 @@ import type {
   PresignedURL,
   StreamChunk,
   ToolCall,
+  CredentialSession,
 } from "../types.js";
 import { Role, messageToOpenAiDict } from "../types.js";
 import {
@@ -243,6 +244,34 @@ export class ControlPlaneGateway implements AgentGateway {
     const data = await this._get("/sessions/cost", params);
     const costValue = data.cost_usd as string | number | undefined;
     return parseFloat(String(costValue ?? "0.0"));
+  }
+
+  /**
+   * Resolve a credential through the control plane for this SDK session.
+   *
+   * Structured credentials expose their complete field map on
+   * `session.fields`; single-value kinds keep the established `session.value`
+   * shape. Treat both as sensitive and never log the returned object.
+   */
+  async resolveCredential(path: string): Promise<CredentialSession> {
+    if (!path.trim()) {
+      throw new Error("path must not be empty");
+    }
+    const params = new URLSearchParams({ path });
+    const data = await this._get("/credentials/resolve", params);
+    const rawFields = data.fields;
+    return {
+      name: String(data.name || ""),
+      path: String(data.path || path),
+      value: String(data.value || ""),
+      type: String(data.type || ""),
+      rotated_at: data.rotated_at ? String(data.rotated_at) : null,
+      kind: String(data.kind || "api_key"),
+      category: String(data.category || "llm"),
+      fields: rawFields && typeof rawFields === "object" && !Array.isArray(rawFields)
+        ? rawFields as Record<string, unknown>
+        : null,
+    };
   }
 
   /**

@@ -217,3 +217,21 @@ export interface PresignedURL {
    */
   file_path: string;
 }
+
+/**
+ * A credential resolved for the current scoped SDK session.
+ *
+ * `fields` is populated for structured credential kinds (`database`,
+ * `basic_auth`). For a single-value kind, use `value` as before. Both are
+ * sensitive and should never be logged.
+ */
+export interface CredentialSession {
+  name: string;
+  path: string;
+  value: string;
+  type: string;
+  rotated_at?: string | null;
+  kind: string;
+  category: string;
+  fields?: Record<string, unknown> | null;
+}
