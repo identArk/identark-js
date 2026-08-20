@@ -33,6 +33,13 @@ export type { AgentGateway } from "./gateway.js";
 // Implementations
 export { DirectGateway } from "./gateways/direct.js";
 export { ControlPlaneGateway } from "./gateways/control-plane.js";
+export {
+  ManagedToolsClient,
+  type ManagedExecution,
+  type ManagedExecutionStatus,
+  type ManagedToolDefinition,
+  type ManagedToolsClientOptions,
+} from "./managed-tools.js";
 
 // Models
 export {
@@ -54,6 +61,7 @@ export {
   IdentArkError,
   GatewayError,
   ControlPlaneError,
+  ManagedToolsError,
   AuthenticationError,
   CostCapExceededError,
   SessionNotFoundError,

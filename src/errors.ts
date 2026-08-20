@@ -62,6 +62,14 @@ export class ControlPlaneError extends GatewayError {
   }
 }
 
+/** A managed MCP/database execution request was rejected or failed. */
+export class ManagedToolsError extends ControlPlaneError {
+  constructor(message: string, statusCode: number = 0, errorCode: string = "managed_tools_error") {
+    super(message, statusCode, errorCode);
+    Object.setPrototypeOf(this, ManagedToolsError.prototype);
+  }
+}
+
 /**
  * Session token is invalid or has expired.
  */
