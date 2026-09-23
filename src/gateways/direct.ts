@@ -34,6 +34,98 @@ import {
 import { estimateCost } from "../pricing.js";
 import { validateToolDefinitions } from "../validation.js";
 
+/** Error codes a provider may use to signal a content-policy block. */
+const CONTENT_POLICY_CODES = ["content_filter", "content_policy_violation", "output_blocked"];
+
+/** Error types the Anthropic API may use to signal a content-policy block. */
+const ANTHROPIC_CONTENT_POLICY_TYPES = ["content_policy_violation", "content_filter"];
+
+/**
+ * Collect the constructor names along an error's prototype chain.
+ *
+ * This is the TypeScript analogue of Python's `type(exc).__mro__` walk: it
+ * lets the classifier recognise a provider SDK error by class hierarchy
+ * without importing (or depending on) that optional SDK.
+ */
+function errorClassChain(exc: unknown): string[] {
+  const names: string[] = [];
+  if (exc === null || exc === undefined) {
+    return names;
+  }
+  let proto: object | null = Object.getPrototypeOf(exc as object);
+  while (proto) {
+    const name = (proto as { constructor?: { name?: string } }).constructor?.name;
+    if (name) {
+      names.push(name);
+    }
+    proto = Object.getPrototypeOf(proto);
+  }
+  return names;
+}
+
+/**
+ * Read the HTTP status code off a provider SDK error.
+ *
+ * The OpenAI and Anthropic JS SDKs expose it as `status`; `status_code` is
+ * accepted too so errors shaped like the Python SDK's classify the same way.
+ */
+function errorStatusCode(exc: unknown): number | undefined {
+  const e = exc as { status?: unknown; status_code?: unknown };
+  const raw = e?.status ?? e?.status_code;
+  return typeof raw === "number" ? raw : undefined;
+}
+
+/**
+ * Read a provider error's `retry-after` hint, in seconds.
+ *
+ * Unlike the Python SDK — where the value sits on the exception as
+ * `retry_after` — the JS SDKs surface it on the response headers, so both
+ * shapes are checked. Returns undefined when no usable value is present.
+ */
+function errorRetryAfterSeconds(exc: unknown): number | undefined {
+  const e = exc as {
+    retryAfter?: unknown;
+    retry_after?: unknown;
+    headers?: unknown;
+  };
+  if (!e) {
+    return undefined;
+  }
+
+  let raw: unknown = e.retryAfter ?? e.retry_after;
+
+  if (raw === undefined || raw === null) {
+    const headers = e.headers;
+    if (headers && typeof (headers as Headers).get === "function") {
+      raw = (headers as Headers).get("retry-after");
+    } else if (headers && typeof headers === "object") {
+      const record = headers as Record<string, unknown>;
+      raw = record["retry-after"] ?? record["Retry-After"];
+    }
+  }
+
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+
+  const seconds = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
+}
+
+/** Read a provider error's machine-readable error code. */
+function errorCode(exc: unknown): string | undefined {
+  const e = exc as { code?: unknown; error_code?: unknown };
+  const raw = e?.code ?? e?.error_code;
+  return typeof raw === "string" ? raw : undefined;
+}
+
+/** Read a provider error's machine-readable error type. */
+function errorType(exc: unknown): string | undefined {
+  const e = exc as { type?: unknown; error_type?: unknown };
+  const raw = e?.type ?? e?.error_type;
+  return typeof raw === "string" ? raw : undefined;
+}
+
 /**
  * Local development implementation of AgentGateway.
  *
@@ -281,54 +373,56 @@ export class DirectGateway implements AgentGateway {
       kwargs.tool_choice = toolChoice;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let completion: any;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const completion = await (this.client as any).chat.completions.create(kwargs);
-      const choice = completion.choices[0];
-      const rawMsg = choice.message;
-      const usage = completion.usage;
-
-      const toolCalls: ToolCall[] | undefined = rawMsg.tool_calls
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ? rawMsg.tool_calls.map((tc: any) => ({
-            id: tc.id,
-            function: {
-              name: tc.function.name,
-              arguments: tc.function.arguments,
-            },
-          }))
-        : undefined;
-
-      const inputTokens = usage?.prompt_tokens ?? 0;
-      const outputTokens = usage?.completion_tokens ?? 0;
-      const cost = estimateCost(this.model, inputTokens, outputTokens, this.provider);
-
-      const response: LLMResponse = {
-        message: {
-          role: Role.ASSISTANT,
-          content: rawMsg.content || "",
-          tokens: outputTokens,
-        },
-        cost_usd: cost,
-        model: this.model,
-        finish_reason: choice.finish_reason,
-        usage: {
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
-          total_tokens: inputTokens + outputTokens,
-          cached_tokens:
-            usage?.prompt_tokens_details?.cached_tokens ?? 0,
-        },
-      };
-
-      if (toolCalls) {
-        response.tool_calls = toolCalls;
-      }
-
-      return response;
+      completion = await (this.client as any).chat.completions.create(kwargs);
     } catch (exc) {
       this._classifyOpenAiError(exc as Error);
     }
+
+    const choice = completion.choices[0];
+    const rawMsg = choice.message;
+    const usage = completion.usage;
+
+    const toolCalls: ToolCall[] | undefined = rawMsg.tool_calls
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ? rawMsg.tool_calls.map((tc: any) => ({
+          id: tc.id,
+          function: {
+            name: tc.function.name,
+            arguments: tc.function.arguments,
+          },
+        }))
+      : undefined;
+
+    const inputTokens = usage?.prompt_tokens ?? 0;
+    const outputTokens = usage?.completion_tokens ?? 0;
+    const cost = estimateCost(this.model, inputTokens, outputTokens, this.provider);
+
+    const response: LLMResponse = {
+      message: {
+        role: Role.ASSISTANT,
+        content: rawMsg.content || "",
+        tokens: outputTokens,
+      },
+      cost_usd: cost,
+      model: this.model,
+      finish_reason: choice.finish_reason,
+      usage: {
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        total_tokens: inputTokens + outputTokens,
+        cached_tokens: usage?.prompt_tokens_details?.cached_tokens ?? 0,
+      },
+    };
+
+    if (toolCalls) {
+      response.tool_calls = toolCalls;
+    }
+
+    return response;
   }
 
   private async _callAnthropic(
@@ -366,87 +460,156 @@ export class DirectGateway implements AgentGateway {
       }));
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let response: any;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await (this.client as any).messages.create(kwargs);
-
-      let content = "";
-      const toolCalls: ToolCall[] = [];
-
-      for (const block of response.content) {
-        if (block.type === "text") {
-          content += block.text;
-        } else if (block.type === "tool_use") {
-          toolCalls.push({
-            id: block.id,
-            function: {
-              name: block.name,
-              arguments: JSON.stringify(block.input),
-            },
-          });
-        }
-      }
-
-      const inputTokens = response.usage.input_tokens;
-      const outputTokens = response.usage.output_tokens;
-      const cost = estimateCost(this.model, inputTokens, outputTokens, "anthropic");
-
-      const finishMap: Record<string, string> = {
-        end_turn: "stop",
-        tool_use: "tool_calls",
-        max_tokens: "length",
-      };
-      const finishReason = finishMap[response.stop_reason || "end_turn"] || "stop";
-
-      const anthropicResponse: LLMResponse = {
-        message: {
-          role: Role.ASSISTANT,
-          content,
-          tokens: outputTokens,
-        },
-        cost_usd: cost,
-        model: this.model,
-        finish_reason: finishReason,
-        usage: {
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
-          total_tokens: inputTokens + outputTokens,
-        },
-      };
-
-      if (toolCalls.length > 0) {
-        anthropicResponse.tool_calls = toolCalls;
-      }
-
-      return anthropicResponse;
+      response = await (this.client as any).messages.create(kwargs);
     } catch (exc) {
-      const excStr = (exc as Error).toString().toLowerCase();
-      if (
-        excStr.includes("content filtering policy") ||
-        excStr.includes("output blocked")
-      ) {
-        throw new ContentPolicyError((exc as Error).message);
-      }
-      throw new ProviderError(`Anthropic API error: ${exc}`);
+      this._classifyAnthropicError(exc as Error);
     }
+
+    let content = "";
+    const toolCalls: ToolCall[] = [];
+
+    for (const block of response.content) {
+      if (block.type === "text") {
+        content += block.text;
+      } else if (block.type === "tool_use") {
+        toolCalls.push({
+          id: block.id,
+          function: {
+            name: block.name,
+            arguments: JSON.stringify(block.input),
+          },
+        });
+      }
+    }
+
+    const inputTokens = response.usage.input_tokens;
+    const outputTokens = response.usage.output_tokens;
+    const cost = estimateCost(this.model, inputTokens, outputTokens, "anthropic");
+
+    const finishMap: Record<string, string> = {
+      end_turn: "stop",
+      tool_use: "tool_calls",
+      max_tokens: "length",
+    };
+    const finishReason = finishMap[response.stop_reason || "end_turn"] || "stop";
+
+    const anthropicResponse: LLMResponse = {
+      message: {
+        role: Role.ASSISTANT,
+        content,
+        tokens: outputTokens,
+      },
+      cost_usd: cost,
+      model: this.model,
+      finish_reason: finishReason,
+      usage: {
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        total_tokens: inputTokens + outputTokens,
+      },
+    };
+
+    if (toolCalls.length > 0) {
+      anthropicResponse.tool_calls = toolCalls;
+    }
+
+    return anthropicResponse;
   }
 
+  /**
+   * Re-throw an OpenAI-compatible SDK error as an IdentArk error.
+   *
+   * Detection priority:
+   * 1. Error class hierarchy (most reliable)
+   * 2. HTTP status code (if present)
+   * 3. Error code (if present)
+   * 4. String matching (fallback)
+   */
   private _classifyOpenAiError(exc: Error): never {
-    const excType = exc.constructor.name;
-    const excStr = exc.toString().toLowerCase();
+    const excClassName = exc?.constructor?.name ?? "";
+    const excChain = errorClassChain(exc);
+    const statusCode = errorStatusCode(exc);
 
-    if (excType.includes("RateLimitError")) {
-      throw new RateLimitError(exc.message, 60, this.provider);
+    // Rate limit: class name or 429 status.
+    if (excChain.includes("RateLimitError") || statusCode === 429) {
+      throw new RateLimitError(
+        exc.message,
+        errorRetryAfterSeconds(exc) ?? 60,
+        this.provider,
+      );
     }
+
+    // Content policy: class name, error code, or a recognisable message.
+    if (excChain.includes("ContentFilterFinishReasonError") || excClassName.includes("ContentFilter")) {
+      throw new ContentPolicyError(exc.message);
+    }
+
+    const code = errorCode(exc);
+    if (code !== undefined && CONTENT_POLICY_CODES.includes(code)) {
+      throw new ContentPolicyError(exc.message);
+    }
+
+    // String fallback for edge cases (provider SDK variations).
+    const excStr = exc.toString().toLowerCase();
     if (
-      excType.includes("ContentFilter") ||
       excStr.includes("content_filter") ||
       excStr.includes("content filtering policy") ||
       excStr.includes("output blocked")
     ) {
       throw new ContentPolicyError(exc.message);
     }
+
+    // Authentication errors.
+    if (excChain.includes("AuthenticationError") || statusCode === 401) {
+      throw new ProviderError(`Authentication failed: ${exc}`);
+    }
+
+    // Default: generic provider error.
     throw new ProviderError(`${this.provider.charAt(0).toUpperCase() + this.provider.slice(1)} API error: ${exc}`);
+  }
+
+  /**
+   * Re-throw an Anthropic SDK error as an IdentArk error.
+   */
+  private _classifyAnthropicError(exc: Error): never {
+    const excChain = errorClassChain(exc);
+    const statusCode = errorStatusCode(exc);
+
+    // Rate limit.
+    if (excChain.includes("RateLimitError") || statusCode === 429) {
+      throw new RateLimitError(
+        exc.message,
+        errorRetryAfterSeconds(exc) ?? 60,
+        "anthropic",
+      );
+    }
+
+    // Content policy (Anthropic uses the "content_policy_violation" error type).
+    const type = errorType(exc);
+    if (type !== undefined && ANTHROPIC_CONTENT_POLICY_TYPES.includes(type)) {
+      throw new ContentPolicyError(exc.message);
+    }
+
+    // String fallback.
+    const excStr = exc.toString().toLowerCase();
+    if (
+      excStr.includes("content filtering policy") ||
+      excStr.includes("output blocked") ||
+      excStr.includes("content policy")
+    ) {
+      throw new ContentPolicyError(exc.message);
+    }
+
+    // Authentication.
+    if (excChain.includes("AuthenticationError") || statusCode === 401) {
+      throw new ProviderError(`Anthropic authentication failed: ${exc}`);
+    }
+
+    throw new ProviderError(`Anthropic API error: ${exc}`);
   }
 
   // ── Streaming ─────────────────────────────────────────────────────────────
@@ -580,14 +743,7 @@ export class DirectGateway implements AgentGateway {
         output_tokens: outputTokens,
       };
     } catch (exc) {
-      const excStr = (exc as Error).toString().toLowerCase();
-      if (
-        excStr.includes("content filtering policy") ||
-        excStr.includes("output blocked")
-      ) {
-        throw new ContentPolicyError((exc as Error).message);
-      }
-      throw new ProviderError(`Anthropic streaming error: ${exc}`);
+      this._classifyAnthropicError(exc as Error);
     }
   }
 }
