@@ -32,6 +32,7 @@ import {
 } from "../errors.js";
 
 import { estimateCost } from "../pricing.js";
+import { validateToolDefinitions } from "../validation.js";
 
 /**
  * Local development implementation of AgentGateway.
@@ -105,6 +106,7 @@ export class DirectGateway implements AgentGateway {
     toolChoice: string | Record<string, unknown> = "auto",
   ): Promise<LLMResponse> {
     this._checkCostCap();
+    validateToolDefinitions(tools);
     const messages = this._buildMessages(newMessages);
 
     let response: LLMResponse;
@@ -164,6 +166,7 @@ export class DirectGateway implements AgentGateway {
     tools?: Record<string, unknown>[],
     toolChoice: string | Record<string, unknown> = "auto",
   ): AsyncGenerator<StreamChunk> {
+    validateToolDefinitions(tools);
     if (this.costCap !== undefined && this.totalCost >= this.costCap) {
       throw new CostCapExceededError(
         `Cost cap of $${this.costCap.toFixed(4)} reached.`,

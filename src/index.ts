@@ -76,6 +76,13 @@ export {
   ConfigurationError,
 } from "./errors.js";
 
+// Validation
+export {
+  validateToolDefinitions,
+  validateToolResultJson,
+  validateMessageContent,
+} from "./validation.js";
+
 // Testing
 export { MockGateway } from "./testing/mock-gateway.js";
 
