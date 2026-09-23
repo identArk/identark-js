@@ -102,4 +102,18 @@ export const version = "1.0.3";
 export const author = "Gold Okpa";
 export const license = "MIT";
 
-export { estimateCost, OPENAI_PRICING, ANTHROPIC_PRICING, MISTRAL_PRICING } from "./pricing.js";
+// Pricing
+export {
+  estimateCost,
+  getPricing,
+  setPricingTable,
+  listKnownModels,
+  initPricing,
+  type ModelPricing,
+  BUNDLED_PRICING,
+  OPENAI_PRICING,
+  ANTHROPIC_PRICING,
+  MISTRAL_PRICING,
+  GEMINI_PRICING,
+  UNKNOWN_MODEL_RATE,
+} from "./pricing.js";
