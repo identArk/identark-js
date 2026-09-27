@@ -30,6 +30,16 @@ import {
 } from "../errors.js";
 
 /**
+ * Where conversation history lives.
+ *
+ * - `"server"` (default): the control plane keeps it, encrypted and deleted
+ *   after the organisation's retention period; you send only the new turn.
+ * - `"client"`: zero retention. This gateway keeps the history in memory and
+ *   sends the full conversation each call; the control plane stores none of it.
+ */
+export type HistoryMode = "server" | "client";
+
+/**
  * Production implementation of AgentGateway.
  *
  * Routes all requests through the IdentArk control plane. When running
@@ -42,6 +52,9 @@ export class ControlPlaneGateway implements AgentGateway {
   private sessionId?: string;
   private timeout: number;
   private maxRetries: number;
+  private historyMode: HistoryMode;
+  /** Client-held conversation, OpenAI-shaped so assistant tool calls survive replay. */
+  private clientHistory: Record<string, unknown>[] = [];
 
   /**
    * Create a new ControlPlaneGateway instance.
@@ -52,6 +65,8 @@ export class ControlPlaneGateway implements AgentGateway {
    * @param sessionId - Session identifier. Auto-detected from IDENTARK_SESSION_ID.
    * @param timeout - Per-request timeout in seconds. Default: 30.
    * @param maxRetries - Retry attempts on transient failures. Default: 3.
+   * @param history - `"server"` (default) or `"client"` for zero retention.
+   *                  Auto-detected from IDENTARK_HISTORY_MODE.
    */
   constructor(
     apiKey?: string,
@@ -59,6 +74,7 @@ export class ControlPlaneGateway implements AgentGateway {
     sessionId?: string,
     timeout: number = 30.0,
     maxRetries: number = 3,
+    history?: HistoryMode,
   ) {
     this.apiKey =
       apiKey ||
@@ -75,6 +91,12 @@ export class ControlPlaneGateway implements AgentGateway {
     }
     this.timeout = timeout;
     this.maxRetries = maxRetries;
+
+    const mode = history || (process.env.IDENTARK_HISTORY_MODE as string | undefined) || "server";
+    if (mode !== "server" && mode !== "client") {
+      throw new ConfigurationError(`history must be "server" or "client", got "${mode}".`);
+    }
+    this.historyMode = mode;
 
     if (!this.apiKey) {
       throw new ConfigurationError(
@@ -97,25 +119,38 @@ export class ControlPlaneGateway implements AgentGateway {
     tools?: Record<string, unknown>[],
     toolChoice: string | Record<string, unknown> = "auto",
   ): Promise<LLMResponse> {
-    const payload: Record<string, unknown> = {
-      new_messages: newMessages.map((m) => messageToOpenAiDict(m)),
-    };
-    if (this.sessionId) {
-      payload.session_id = this.sessionId;
-    }
-    if (tools) {
-      payload.tools = tools;
-      payload.tool_choice = toolChoice;
-    }
+    const newDicts = newMessages.map((m) => messageToOpenAiDict(m));
+    const payload = this._llmPayload(newDicts, tools, toolChoice);
 
     const data = await this._post("/llm/invoke", payload);
-    return this._parseLlmResponse(data);
+    const response = this._parseLlmResponse(data);
+    if (this.historyMode === "client") {
+      const assistant: Record<string, unknown> = {
+        role: "assistant",
+        content: response.message.content,
+      };
+      if (response.tool_calls) {
+        assistant.tool_calls = response.tool_calls.map((tc) => ({
+          id: tc.id,
+          type: "function",
+          function: { name: tc.function.name, arguments: tc.function.arguments },
+        }));
+      }
+      this.clientHistory.push(...newDicts, assistant);
+    }
+    return response;
   }
 
   /**
-   * Persist messages to conversation history via the control plane.
+   * Persist messages to conversation history.
+   *
+   * With `history: "client"` they are kept in this gateway only.
    */
   async persistMessages(messages: Message[]): Promise<void> {
+    if (this.historyMode === "client") {
+      this.clientHistory.push(...messages.map((m) => messageToOpenAiDict(m)));
+      return;
+    }
     const payload: Record<string, unknown> = {
       messages: messages.map((m) => messageToOpenAiDict(m)),
     };
@@ -159,16 +194,14 @@ export class ControlPlaneGateway implements AgentGateway {
     tools?: Record<string, unknown>[],
     toolChoice: string | Record<string, unknown> = "auto",
   ): AsyncGenerator<StreamChunk> {
-    const payload: Record<string, unknown> = {
-      new_messages: newMessages.map((m) => messageToOpenAiDict(m)),
+    const newDicts = newMessages.map((m) => messageToOpenAiDict(m));
+    const payload = this._llmPayload(newDicts, tools, toolChoice);
+    const streamed: string[] = [];
+    const recordReply = () => {
+      if (this.historyMode === "client") {
+        this.clientHistory.push(...newDicts, { role: "assistant", content: streamed.join("") });
+      }
     };
-    if (this.sessionId) {
-      payload.session_id = this.sessionId;
-    }
-    if (tools) {
-      payload.tools = tools;
-      payload.tool_choice = toolChoice;
-    }
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
@@ -210,26 +243,70 @@ export class ControlPlaneGateway implements AgentGateway {
 
           const data = line.slice("data:".length).trim();
           if (data === "[DONE]") {
+            recordReply();
             return;
           }
 
+          let event: Record<string, unknown>;
           try {
-            const event = JSON.parse(data);
-            yield {
-              content: event.content || "",
-              finish_reason: event.finish_reason || null,
-              model: event.model || "unknown",
-              input_tokens: event.input_tokens || 0,
-              output_tokens: event.output_tokens || 0,
-            };
+            event = JSON.parse(data);
           } catch {
             continue;
           }
+          if (typeof event !== "object" || event === null) continue;
+          if ("error" in event && Object.keys(event).length === 1) {
+            throw new ControlPlaneError(String(event.error));
+          }
+          // The control plane streams `delta`; `content` is accepted for older servers.
+          const content = String(event.content ?? event.delta ?? "");
+          streamed.push(content);
+          yield {
+            content,
+            finish_reason: (event.finish_reason as string | undefined) || null,
+            model: (event.model as string | undefined) || "unknown",
+            input_tokens: (event.input_tokens as number) || 0,
+            output_tokens: (event.output_tokens as number) || 0,
+          };
         }
       }
+      recordReply();
     } finally {
       reader.releaseLock();
     }
+  }
+
+  /** `"server"` or `"client"` (zero retention). */
+  getHistoryMode(): HistoryMode {
+    return this.historyMode;
+  }
+
+  /** The client-held conversation (`history: "client"` only). */
+  get history(): Record<string, unknown>[] {
+    return [...this.clientHistory];
+  }
+
+  /** Forget the client-held conversation (`history: "client"` only). */
+  clearHistory(): void {
+    this.clientHistory = [];
+  }
+
+  private _llmPayload(
+    newDicts: Record<string, unknown>[],
+    tools: Record<string, unknown>[] | undefined,
+    toolChoice: string | Record<string, unknown>,
+  ): Record<string, unknown> {
+    const payload: Record<string, unknown> =
+      this.historyMode === "client"
+        ? { new_messages: [...this.clientHistory, ...newDicts], store_history: false }
+        : { new_messages: newDicts };
+    if (this.sessionId) {
+      payload.session_id = this.sessionId;
+    }
+    if (tools) {
+      payload.tools = tools;
+      payload.tool_choice = toolChoice;
+    }
+    return payload;
   }
 
   /**

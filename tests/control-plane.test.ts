@@ -319,4 +319,116 @@ describe("ControlPlaneGateway", () => {
       // No error should be thrown
     });
   });
+
+  describe("history modes", () => {
+    const reply = (extra: Record<string, unknown> = {}) => ({
+      ok: true,
+      json: async () => ({
+        message: { role: "assistant", content: "Hello!" },
+        cost_usd: 0.001,
+        model: "gpt-4o",
+        finish_reason: "stop",
+        ...extra,
+      }),
+    });
+    const sent = (call: number) =>
+      JSON.parse((global.fetch as any).mock.calls[call][1].body);
+    const gw = (history?: "server" | "client") =>
+      new ControlPlaneGateway("test-key", "http://localhost:3000", "sess-1", 30, 3, history);
+
+    it("server mode sends only the new turn", async () => {
+      (global.fetch as any).mockResolvedValueOnce(reply());
+      const gateway = gw();
+      await gateway.invokeLlm([{ role: Role.USER, content: "Hi" }]);
+
+      expect(sent(0).new_messages).toEqual([{ role: "user", content: "Hi" }]);
+      expect(sent(0).store_history).toBeUndefined();
+      expect(gateway.getHistoryMode()).toBe("server");
+      expect(gateway.history).toEqual([]);
+    });
+
+    it("client mode holds and replays the conversation", async () => {
+      (global.fetch as any).mockResolvedValue(reply());
+      const gateway = gw("client");
+      await gateway.invokeLlm([{ role: Role.USER, content: "Hi" }]);
+      await gateway.invokeLlm([{ role: Role.USER, content: "And then?" }]);
+
+      expect(sent(0).store_history).toBe(false);
+      expect(sent(1).store_history).toBe(false);
+      expect(sent(0).new_messages.map((m: any) => m.content)).toEqual(["Hi"]);
+      expect(sent(1).new_messages.map((m: any) => m.content)).toEqual(["Hi", "Hello!", "And then?"]);
+      expect(gateway.history.map((m) => m.content)).toEqual(["Hi", "Hello!", "And then?", "Hello!"]);
+    });
+
+    it("client mode keeps assistant tool calls", async () => {
+      (global.fetch as any).mockResolvedValueOnce(
+        reply({
+          message: { role: "assistant", content: "" },
+          tool_calls: [{ id: "call_1", function: { name: "search", arguments: "{}" } }],
+        }),
+      );
+      const gateway = gw("client");
+      await gateway.invokeLlm([{ role: Role.USER, content: "Find it" }]);
+
+      expect(gateway.history[1].tool_calls).toEqual([
+        { id: "call_1", type: "function", function: { name: "search", arguments: "{}" } },
+      ]);
+    });
+
+    it("client mode persist is local", async () => {
+      (global.fetch as any).mockResolvedValue(reply());
+      const gateway = gw("client");
+      await gateway.persistMessages([{ role: Role.SYSTEM, content: "Be brief." }]);
+      expect((global.fetch as any).mock.calls.length).toBe(0);
+      await gateway.invokeLlm([{ role: Role.USER, content: "Hi" }]);
+
+      expect(sent(0).new_messages.map((m: any) => m.content)).toEqual(["Be brief.", "Hi"]);
+      gateway.clearHistory();
+      expect(gateway.history).toEqual([]);
+    });
+
+    it("reads the mode from IDENTARK_HISTORY_MODE and rejects unknown modes", () => {
+      process.env.IDENTARK_HISTORY_MODE = "client";
+      try {
+        expect(gw().getHistoryMode()).toBe("client");
+      } finally {
+        delete process.env.IDENTARK_HISTORY_MODE;
+      }
+      expect(() => gw("browser" as any)).toThrow(ConfigurationError);
+    });
+
+    const sse = (text: string) => ({
+      ok: true,
+      body: new Response(text).body,
+    });
+
+    it("client mode stream records the streamed reply", async () => {
+      (global.fetch as any).mockResolvedValueOnce(
+        sse('data: {"delta": "Hello "}\n\ndata: {"delta": "world"}\n\ndata: {"finish_reason": "stop"}\n\n'),
+      );
+      const gateway = gw("client");
+      let text = "";
+      for await (const chunk of gateway.invokeLlmStream([{ role: Role.USER, content: "Hi" }])) {
+        text += chunk.content;
+      }
+
+      expect(text).toBe("Hello world");
+      expect(sent(0).store_history).toBe(false);
+      expect(gateway.history).toEqual([
+        { role: "user", content: "Hi" },
+        { role: "assistant", content: "Hello world" },
+      ]);
+    });
+
+    it("stream error event raises and records nothing", async () => {
+      (global.fetch as any).mockResolvedValueOnce(sse('data: {"error": "provider down"}\n\n'));
+      const gateway = gw("client");
+      await expect(async () => {
+        for await (const _ of gateway.invokeLlmStream([{ role: Role.USER, content: "Hi" }])) {
+          // drain
+        }
+      }).rejects.toThrow(ControlPlaneError);
+      expect(gateway.history).toEqual([]);
+    });
+  });
 });
