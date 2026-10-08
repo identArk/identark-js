@@ -607,16 +607,15 @@ export class GeminiGateway implements AgentGateway {
   private _classifyGeminiError(exc: unknown): never {
     const message = exc instanceof Error ? exc.message : String(exc);
     const excStr = String(exc).toLowerCase();
+    const status = (exc as { status?: unknown } | null)?.status;
 
-    if (excStr.includes("quota") || excStr.includes("rate") || excStr.includes("429")) {
+    // Keywords are matched at word starts, not as bare substrings: every JS SDK
+    // error names "GoogleGenerativeAI" and the "generativelanguage" host, both of
+    // which contain "rate", and request URLs end in ":generateContent".
+    if (status === 429 || /\b(quota|rate|429)/.test(excStr)) {
       throw new RateLimitError(message, 60, "google");
     }
-    if (
-      excStr.includes("safety") ||
-      excStr.includes("blocked") ||
-      excStr.includes("harm") ||
-      excStr.includes("content")
-    ) {
+    if (/\b(safety|blocked|harm|content)/.test(excStr)) {
       throw new ContentPolicyError(message);
     }
     if (excStr.includes("invalid") && excStr.includes("api")) {

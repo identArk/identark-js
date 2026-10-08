@@ -408,6 +408,40 @@ describe("GeminiGateway", () => {
       await expect(make().invokeLlm([user("x")])).rejects.toThrow(ConfigurationError);
     });
 
+    describe("real @google/generative-ai error messages", () => {
+      const url =
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent";
+      const sdkError = (status: number, statusText: string, detail: string) =>
+        Object.assign(
+          new Error(
+            `[GoogleGenerativeAI Error]: Error fetching from ${url}: [${status} ${statusText}] ${detail}`,
+          ),
+          { status, statusText },
+        );
+
+      it("does not read the SDK name or host as a rate limit", async () => {
+        sendMessage.mockRejectedValue(sdkError(500, "Internal Server Error", "Internal error"));
+        const err = await make()
+          .invokeLlm([user("x")])
+          .catch((e) => e);
+        expect(err).toBeInstanceOf(ProviderError);
+        expect(err).not.toBeInstanceOf(RateLimitError);
+        expect(err).not.toBeInstanceOf(ContentPolicyError);
+      });
+
+      it("maps HTTP 429 to RateLimitError", async () => {
+        sendMessage.mockRejectedValue(sdkError(429, "Too Many Requests", "Try again later"));
+        await expect(make().invokeLlm([user("x")])).rejects.toThrow(RateLimitError);
+      });
+
+      it("maps API_KEY_INVALID to ConfigurationError", async () => {
+        sendMessage.mockRejectedValue(
+          sdkError(400, "Bad Request", "API key not valid. [{\"reason\":\"API_KEY_INVALID\"}]"),
+        );
+        await expect(make().invokeLlm([user("x")])).rejects.toThrow(ConfigurationError);
+      });
+    });
+
     it("wraps anything else in ProviderError", async () => {
       failWith("boom");
       await expect(make().invokeLlm([user("x")])).rejects.toThrow(/Gemini API error: Error: boom/);
