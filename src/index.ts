@@ -33,7 +33,7 @@ export type { AgentGateway } from "./gateway.js";
 // Implementations
 export { DirectGateway } from "./gateways/direct.js";
 export { ControlPlaneGateway } from "./gateways/control-plane.js";
-export type { HistoryMode } from "./gateways/control-plane.js";
+export type { CapabilityProvider, HistoryMode } from "./gateways/control-plane.js";
 export {
   ManagedToolsClient,
   type ManagedExecution,
