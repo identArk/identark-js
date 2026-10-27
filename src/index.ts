@@ -99,7 +99,7 @@ export { MockGateway } from "./testing/mock-gateway.js";
 //   import { identark }          from "identark/integrations/vercel";
 
 // Metadata
-export const version = "1.0.3";
+export const version = "1.0.4";
 export const author = "Gold Okpa";
 export const license = "MIT";
 
