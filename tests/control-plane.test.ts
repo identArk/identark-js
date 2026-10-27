@@ -285,6 +285,54 @@ describe("ControlPlaneGateway", () => {
     });
   });
 
+  describe("governed actions", () => {
+    beforeEach(() => {
+      process.env.IDENTARK_API_KEY = "test-key";
+      process.env.IDENTARK_CONTROL_PLANE_URL = "http://localhost:3000";
+    });
+
+    it("requests a Paystack payment link without any provider credential", async () => {
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ request_id: "exec-1", status: "succeeded", result: { payment_url: "https://checkout.paystack.com/abc" } }),
+      });
+
+      const gateway = new ControlPlaneGateway();
+      const response = await gateway.requestCapability(
+        "payments.payment_link.create",
+        "paystack",
+        { amount_minor: 1500000, currency: "NGN", customer_email: "buyer@example.com", reference: "order-1001" },
+        "order-1001-link",
+      );
+
+      const [url, init] = (global.fetch as any).mock.calls[0];
+      expect(url).toBe("http://localhost:3000/gateway/requests");
+      expect(init.method).toBe("POST");
+      expect(JSON.parse(init.body)).toEqual({
+        capability_id: "payments.payment_link.create",
+        provider: "paystack",
+        payload: { amount_minor: 1500000, currency: "NGN", customer_email: "buyer@example.com", reference: "order-1001" },
+        idempotency_key: "order-1001-link",
+      });
+      expect(response.result).toEqual({ payment_url: "https://checkout.paystack.com/abc" });
+    });
+
+    it("reads an execution by an encoded id", async () => {
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ request_id: "a/b", status: "pending_approval" }),
+      });
+
+      const gateway = new ControlPlaneGateway();
+      const execution = await gateway.getCapabilityExecution("a/b");
+
+      const [url, init] = (global.fetch as any).mock.calls[0];
+      expect(url).toBe("http://localhost:3000/gateway/executions/a%2Fb");
+      expect(init.method).toBe("GET");
+      expect(execution.status).toBe("pending_approval");
+    });
+  });
+
   describe("persistMessages", () => {
     beforeEach(() => {
       process.env.IDENTARK_API_KEY = "test-key";

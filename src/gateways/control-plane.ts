@@ -40,6 +40,12 @@ import {
 export type HistoryMode = "server" | "client";
 
 /**
+ * Providers the control plane can run a governed action on. Paystack is the
+ * payment rail for Nigerian merchants; Stripe serves Nigeria only through it.
+ */
+export type CapabilityProvider = "stripe" | "paystack" | "github" | "aws";
+
+/**
  * Production implementation of AgentGateway.
  *
  * Routes all requests through the IdentArk control plane. When running
@@ -349,6 +355,37 @@ export class ControlPlaneGateway implements AgentGateway {
         ? rawFields as Record<string, unknown>
         : null,
     };
+  }
+
+  /**
+   * Request a governed external action, such as a payment, a payment link or
+   * a refund. Credentials never enter agent code.
+   *
+   * The control plane checks the grant, reserves any budget, waits for human
+   * approval when the grant requires it, and executes with a credential the
+   * agent never sees. Reusing an idempotency key returns the recorded outcome
+   * instead of acting twice.
+   */
+  async requestCapability(
+    capability: string,
+    provider: CapabilityProvider,
+    payload: Record<string, unknown>,
+    idempotencyKey: string,
+  ): Promise<Record<string, unknown>> {
+    return this._post("/gateway/requests", {
+      capability_id: capability,
+      provider,
+      payload,
+      idempotency_key: idempotencyKey,
+    });
+  }
+
+  /**
+   * Read the durable status of a governed action, and its result where the
+   * action returns one (for example a Paystack checkout link).
+   */
+  async getCapabilityExecution(executionId: string): Promise<Record<string, unknown>> {
+    return this._get(`/gateway/executions/${encodeURIComponent(executionId)}`);
   }
 
   /**

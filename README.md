@@ -169,6 +169,26 @@ const totalCost = await gateway.getSessionCost();
 console.log(`Session total: $${totalCost.toFixed(4)}`);
 ```
 
+### Governed Actions (payments, payment links, refunds)
+
+The agent asks the control plane to act; the provider key (Stripe, Paystack,
+GitHub or AWS) stays in IdentArk. Grants, budgets and human approval apply
+before anything executes, and a reused idempotency key never acts twice.
+
+```typescript
+const gateway = new ControlPlaneGateway(); // agent-bound key with mcp:execute
+
+const request = await gateway.requestCapability(
+  "payments.payment_link.create",
+  "paystack",
+  { amount_minor: 1500000, currency: "NGN", customer_email: "buyer@example.com", reference: "order-1001" },
+  "order-1001-link",
+);
+
+// "succeeded" returns the checkout link; "pending_approval" waits for a person.
+const execution = await gateway.getCapabilityExecution(String(request.request_id));
+```
+
 ### Testing with MockGateway
 
 ```typescript
