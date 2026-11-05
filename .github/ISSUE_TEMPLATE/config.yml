@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/identArk/identark-js/blob/main/SECURITY.md
+    about: Email security@identark.io as described in SECURITY.md. Never disclose credentials or exploitable details in a public issue.

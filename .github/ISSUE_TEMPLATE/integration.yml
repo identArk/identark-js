@@ -1,0 +1,60 @@
+name: Integration proposal
+description: Propose a new framework adapter or optional provider integration.
+title: "[Integration]: "
+labels: ["enhancement"]
+body:
+  - type: input
+    id: project
+    attributes:
+      label: Framework or project
+      placeholder: Name and canonical URL
+    validations:
+      required: true
+  - type: textarea
+    id: use_case
+    attributes:
+      label: User need
+      description: Who needs this integration and what workflow does it unlock?
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Proposed supported versions
+    validations:
+      required: true
+  - type: textarea
+    id: mapping
+    attributes:
+      label: AgentGateway mapping
+      description: Explain messages, tools, streaming, errors, cancellation, persistence, files, and cost mapping.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependency and package boundary
+      description: List optional peer dependencies and the proposed package subpath. Required runtime dependencies are not accepted.
+    validations:
+      required: true
+  - type: textarea
+    id: threat_model
+    attributes:
+      label: Credential and logging threat model
+      description: Explain where credentials live and how the adapter prevents exposure through prompts, output, logs, callbacks, and errors.
+    validations:
+      required: true
+  - type: textarea
+    id: maintenance
+    attributes:
+      label: Maintenance commitment
+      description: Who will maintain compatibility and respond to upstream changes?
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I will add tests that need no live service and no real credentials.
+          required: true

@@ -449,10 +449,6 @@ See LICENSE file for details.
 
 ## Contributing
 
-Contributions welcome! Please ensure tests pass and TypeScript is strictly typed.
+Contributions are welcome. Start with an issue labelled [`good first issue`](https://github.com/identArk/identark-js/labels/good%20first%20issue) or [`help wanted`](https://github.com/identArk/identark-js/labels/help%20wanted) and comment to claim it.
 
-```bash
-npm test
-npm run typecheck
-npm run lint
-```
+[CONTRIBUTING.md](CONTRIBUTING.md) covers setup, design constraints, and DCO sign-off (`git commit -s`).
