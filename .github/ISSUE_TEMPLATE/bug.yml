@@ -1,0 +1,70 @@
+name: Bug report
+description: Report a reproducible problem in the TypeScript SDK.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Do not include API keys, tokens, authorization headers, customer data, or private endpoints. Report security issues through the private security link instead.
+  - type: input
+    id: version
+    attributes:
+      label: IdentArk version
+      placeholder: 1.0.4
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      placeholder: Node.js 22.0.0 on Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - AgentGateway types
+        - DirectGateway
+        - ControlPlaneGateway
+        - MockGateway
+        - Managed tools
+        - LangChain.js integration
+        - Vercel AI SDK integration
+        - Gemini integration
+        - Packaging or documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Prefer MockGateway and synthetic values. Redact all sensitive data.
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Paste only sanitized output.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed credentials, tokens, customer data, and private endpoints.
+          required: true
+        - label: This is not a vulnerability report.
+          required: true
