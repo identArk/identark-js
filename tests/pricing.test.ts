@@ -363,13 +363,15 @@ describe("Pricing", () => {
         ANTHROPIC_PRICING,
         MISTRAL_PRICING,
         GEMINI_PRICING,
+        ORCAROUTER_PRICING,
       } = await loadPricing();
 
       const expected =
         Object.keys(OPENAI_PRICING).length +
         Object.keys(ANTHROPIC_PRICING).length +
         Object.keys(MISTRAL_PRICING).length +
-        Object.keys(GEMINI_PRICING).length;
+        Object.keys(GEMINI_PRICING).length +
+        Object.keys(ORCAROUTER_PRICING).length;
       expect(Object.keys(BUNDLED_PRICING)).toHaveLength(expected);
     });
 

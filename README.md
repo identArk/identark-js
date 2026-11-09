@@ -379,6 +379,82 @@ try {
 | **Mistral** | OpenAI SDK (base_url) | `mistral-large-latest` |
 | **Ollama** | OpenAI SDK (local) | `llama3.2`, custom models |
 | **vLLM** | OpenAI SDK (base_url) | Any HuggingFace model |
+| **OrcaRouter Cyber Inference** | Built-in (`identark/providers/orcarouter`) | `orcarouter/auto`, `orca/orcacyber-*` |
+
+### OrcaRouter Cyber Inference
+
+[OrcaRouter](https://www.orcarouter.ai) is an OpenAI-compatible AI gateway that
+routes many providers behind one endpoint, and runs gateway-level, zero-trust
+security for AI agents on the same endpoint. The built-in provider targets
+**authorized, scoped security inference** for verified security teams — the
+inference workloads that generic gateways often reject or degrade.
+
+Model selection, in order:
+
+1. `orcarouter/auto` — default, automatic routing, works with any key.
+2. `orca/orcacyber-ultra-1.0` / `orca/orcacyber-zero-1.5` — dedicated cyber
+   models for business-verified security teams (see
+   [cyber models](https://www.orcarouter.ai/models?tier=cyber)).
+3. `orcarouter/fusion` — general fallback.
+
+Model IDs are always resolved from the live catalog
+(`GET /v1/models?capability=chat`); a small verified seed is used, flagged
+`degraded`, only when discovery fails. Image-generation, video, rerank and
+embedding endpoints are filtered out of the chat selector, and multimodal
+filters fail closed. No model ID is ever free text.
+
+Two ways to authenticate, both producing the same durable `sk-orca-…` key:
+
+```typescript
+import {
+  OrcaRouterApiKeySource,
+  OrcaRouterPkceSource,
+  createOrcaRouterGateway,
+  discoverOrcaRouterModels,
+} from "identark/providers/orcarouter";
+
+// 1. Existing API key (or ORCAROUTER_API_KEY in the environment).
+const source = new OrcaRouterApiKeySource();
+const credential = await source.obtain(1);
+
+// 2. OAuth 2.0 + PKCE ("Connect with OrcaRouter").
+//    Loopback flow: opens the browser and captures the callback on 127.0.0.1.
+const oauth = new OrcaRouterPkceSource({ onAuthorizeUrl: (url) => console.log(url) });
+const oauthCredential = await oauth.connect(2);
+
+// Model discovery against the inference origin.
+const catalog = await discoverOrcaRouterModels({
+  apiBaseUrl: "https://api.orcarouter.ai/v1",
+  apiKey: credential.apiKey,
+});
+
+// Provider is pinned explicitly, so no request can fall back to another API.
+const { gateway } = createOrcaRouterGateway({
+  apiKey: credential.apiKey,
+  model: "orcarouter/auto",
+  catalog, // fail closed if the model is no longer available
+});
+const reply = await gateway.invokeLlm([{ role: "user", content: "hello" }]);
+```
+
+Origins: inference goes to `https://api.orcarouter.ai/v1` and authorization to
+`https://www.orcarouter.ai`. Both are configurable for self-hosted deployments
+via `ORCA_BASE_URL` (shared) or the explicit `ORCA_AUTH_BASE_URL` /
+`ORCA_API_BASE_URL` overrides; HTTPS is required except on loopback. Authorization
+codes are exchanged at `POST /api/v1/auth/keys` on the authorization origin (not
+under `/v1`).
+
+See [`examples/orcarouter-usage.ts`](examples/orcarouter-usage.ts) for a
+runnable, credential-free example.
+
+Environment variables for this provider:
+
+```bash
+ORCAROUTER_API_KEY     # Optional: key used when nothing is stored yet
+ORCA_BASE_URL          # Optional: shared origin for self-hosted deployments
+ORCA_AUTH_BASE_URL     # Optional: authorization origin override
+ORCA_API_BASE_URL      # Optional: inference origin override
+```
 
 ### Cost Estimation
 

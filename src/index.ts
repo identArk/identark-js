@@ -98,8 +98,16 @@ export { MockGateway } from "./testing/mock-gateway.js";
 //   import { IdentArkChatModel } from "identark/integrations/langchain";
 //   import { identark }          from "identark/integrations/vercel";
 
+// Providers
+//
+// `identark/providers/orcarouter` is a named OrcaRouter Cyber Inference
+// provider. Like the integrations below it is a subpath export rather than a
+// barrel re-export, so the core import stays lean:
+//
+//   import { OrcaRouterClient } from "identark/providers/orcarouter";
+
 // Metadata
-export const version = "1.0.4";
+export const version = "1.0.5";
 export const author = "Gold Okpa";
 export const license = "MIT";
 
@@ -116,5 +124,6 @@ export {
   ANTHROPIC_PRICING,
   MISTRAL_PRICING,
   GEMINI_PRICING,
+  ORCAROUTER_PRICING,
   UNKNOWN_MODEL_RATE,
 } from "./pricing.js";

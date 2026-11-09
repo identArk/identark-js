@@ -57,12 +57,30 @@ export const GEMINI_PRICING: Record<string, ModelPricing> = {
   "gemini-2.0-flash-exp": { input: 0.1, output: 0.4 },
 };
 
+/**
+ * OrcaRouter Cyber Inference models, keyed by their vendor-qualified IDs.
+ * Rates mirror the per-million-token `pricing` block published by
+ * `GET https://api.orcarouter.ai/v1/models?capability=chat` (USD per 1M
+ * tokens) and are approximate, like every other table here.
+ *
+ * `orcarouter/auto` and `orcarouter/fusion` route automatically, so no fixed
+ * rate is published: calls on them use UNKNOWN_MODEL_RATE until the host
+ * overrides them with `setPricingTable()` or a pricing URL.
+ */
+export const ORCAROUTER_PRICING: Record<string, ModelPricing> = {
+  "orca/orcacyber-ultra-1.0": { input: 5.0, output: 10.0 },
+  "orca/orcacyber-zero-1.5": { input: 3.0, output: 7.5 },
+  "orca/orcacyber-zero-1.0": { input: 3.0, output: 7.5 },
+  "deepseek/deepseek-v4-pro": { input: 0.66, output: 1.98 },
+};
+
 /** Bundled defaults — updated periodically with SDK releases. */
 export const BUNDLED_PRICING: Record<string, ModelPricing> = {
   ...OPENAI_PRICING,
   ...ANTHROPIC_PRICING,
   ...MISTRAL_PRICING,
   ...GEMINI_PRICING,
+  ...ORCAROUTER_PRICING,
 };
 
 /** Fallback rate (USD per token) for unknown models. */

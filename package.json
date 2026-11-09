@@ -1,6 +1,6 @@
 {
   "name": "identark",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "The AgentGateway Protocol — secure, scalable agent execution infrastructure",
   "repository": {
     "type": "git",
@@ -29,6 +29,10 @@
     "./integrations/vercel": {
       "types": "./dist/integrations/vercel.d.ts",
       "import": "./dist/integrations/vercel.js"
+    },
+    "./providers/orcarouter": {
+      "types": "./dist/providers/orcarouter/index.d.ts",
+      "import": "./dist/providers/orcarouter/index.js"
     },
     "./package.json": "./package.json"
   },

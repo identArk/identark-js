@@ -9,6 +9,10 @@
  *
  * Supports OpenAI, Anthropic, Mistral (EU), and any OpenAI-compatible
  * endpoint including Ollama for fully local, zero-egress inference.
+ *
+ * For `identark/providers/orcarouter`, pass `provider: "orcarouter"` (the
+ * provider preset does this) to route through OrcaRouter Cyber
+ * Inference with its own pricing entry and error labels.
  */
 
 import { mkdir } from "fs/promises";
@@ -154,7 +158,7 @@ export class DirectGateway implements AgentGateway {
    * @param costCapUsd - Optional soft cost cap. Raises CostCapExceededError when exceeded.
    * @param workspaceDir - Local directory for file operations. Defaults to '/workspace'.
    * @param provider - Optional explicit provider override. Recognised values:
-   *                   'openai', 'anthropic', 'mistral', 'local'.
+   *                   'openai', 'anthropic', 'mistral', 'local', 'orcarouter'.
    */
   constructor(
     llmClient: unknown,
@@ -354,6 +358,9 @@ export class DirectGateway implements AgentGateway {
     }
     if (baseUrl.includes("mistral.ai")) {
       return "mistral";
+    }
+    if (baseUrl.includes("api.orcarouter.ai")) {
+      return "orcarouter";
     }
 
     return "openai";
