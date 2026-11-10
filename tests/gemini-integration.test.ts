@@ -38,7 +38,7 @@ describe("GeminiGateway", () => {
   const make = (extra: Record<string, unknown> = {}) =>
     new GeminiGateway({
       apiKey: "test-api-key",
-      model: "gemini-1.5-flash",
+      model: "gemini-3.8-flash",
       systemPrompt: "You are a helpful assistant.",
       workspaceDir: tempDir,
       client,
@@ -61,7 +61,7 @@ describe("GeminiGateway", () => {
 
   describe("constructor", () => {
     it("throws ConfigurationError when apiKey is missing", () => {
-      expect(() => new GeminiGateway({ apiKey: "", model: "gemini-1.5-flash", client })).toThrow(
+      expect(() => new GeminiGateway({ apiKey: "", model: "gemini-3.8-flash", client })).toThrow(
         ConfigurationError,
       );
     });
@@ -72,14 +72,14 @@ describe("GeminiGateway", () => {
       );
     });
 
-    it("defaults the model to gemini-1.5-pro", () => {
-      expect(new GeminiGateway({ apiKey: "k", client }).getModel()).toBe("gemini-1.5-pro");
+    it("defaults the model to gemini-3.8-flash", () => {
+      expect(new GeminiGateway({ apiKey: "k", client }).getModel()).toBe("gemini-3.8-flash");
     });
 
     it("passes system prompt, safety settings and generation config to the model", () => {
       make({ safetySettings: [{ category: "x" }], generationConfig: { temperature: 0 } });
       expect(getGenerativeModel).toHaveBeenCalledWith({
-        model: "gemini-1.5-flash",
+        model: "gemini-3.8-flash",
         systemInstruction: "You are a helpful assistant.",
         safetySettings: [{ category: "x" }],
         generationConfig: { temperature: 0 },
@@ -87,8 +87,8 @@ describe("GeminiGateway", () => {
     });
 
     it("omits optional model params that were not supplied", () => {
-      new GeminiGateway({ apiKey: "k", model: "gemini-1.5-flash", client });
-      expect(getGenerativeModel).toHaveBeenCalledWith({ model: "gemini-1.5-flash" });
+      new GeminiGateway({ apiKey: "k", model: "gemini-3.8-flash", client });
+      expect(getGenerativeModel).toHaveBeenCalledWith({ model: "gemini-3.8-flash" });
     });
 
     it("throws ConfigurationError when the SDK is not installed", () => {
@@ -101,7 +101,7 @@ describe("GeminiGateway", () => {
       if (installed) {
         return; // Only meaningful where the optional peer dependency is absent.
       }
-      expect(() => new GeminiGateway({ apiKey: "k", model: "gemini-1.5-flash" })).toThrow(
+      expect(() => new GeminiGateway({ apiKey: "k", model: "gemini-3.8-flash" })).toThrow(
         /npm install @google\/generative-ai/,
       );
     });
@@ -117,7 +117,7 @@ describe("GeminiGateway", () => {
     });
 
     it("reports the configured model", () => {
-      expect(make().getModel()).toBe("gemini-1.5-flash");
+      expect(make().getModel()).toBe("gemini-3.8-flash");
     });
   });
 
@@ -126,7 +126,7 @@ describe("GeminiGateway", () => {
       const response = await make().invokeLlm([user("Hello!")]);
       expect(response.message.role).toBe(Role.ASSISTANT);
       expect(response.message.content).toBe("Hello! How can I help you?");
-      expect(response.model).toBe("gemini-1.5-flash");
+      expect(response.model).toBe("gemini-3.8-flash");
       expect(response.finish_reason).toBe("stop");
       expect(response.usage).toEqual({ input_tokens: 10, output_tokens: 15, total_tokens: 25 });
       expect(response.tool_calls).toBeUndefined();
@@ -161,7 +161,7 @@ describe("GeminiGateway", () => {
       const gateway = make();
       expect(await gateway.getSessionCost()).toBe(0);
       await gateway.invokeLlm([user("Hello")]);
-      expect(await gateway.getSessionCost()).toBeCloseTo((10 * 0.075 + 15 * 0.3) / 1_000_000, 12);
+      expect(await gateway.getSessionCost()).toBeCloseTo((10 * 0.75 + 15 * 3.75) / 1_000_000, 12);
     });
 
     it("passes tools as functionDeclarations", async () => {
@@ -410,7 +410,7 @@ describe("GeminiGateway", () => {
 
     describe("real @google/generative-ai error messages", () => {
       const url =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent";
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
       const sdkError = (status: number, statusText: string, detail: string) =>
         Object.assign(
           new Error(
@@ -487,12 +487,12 @@ describe("GeminiGateway", () => {
         out.push(chunk);
       }
       expect(out).toEqual([
-        { content: "Hel", finish_reason: null, model: "gemini-1.5-flash" },
-        { content: "lo", finish_reason: null, model: "gemini-1.5-flash" },
+        { content: "Hel", finish_reason: null, model: "gemini-3.8-flash" },
+        { content: "lo", finish_reason: null, model: "gemini-3.8-flash" },
         {
           content: "",
           finish_reason: "stop",
-          model: "gemini-1.5-flash",
+          model: "gemini-3.8-flash",
           input_tokens: 4,
           output_tokens: 6,
         },
@@ -501,7 +501,7 @@ describe("GeminiGateway", () => {
         user("Hi"),
         { role: Role.ASSISTANT, content: "Hello" },
       ]);
-      expect(await gateway.getSessionCost()).toBeCloseTo((4 * 0.075 + 6 * 0.3) / 1_000_000, 12);
+      expect(await gateway.getSessionCost()).toBeCloseTo((4 * 0.75 + 6 * 3.75) / 1_000_000, 12);
     });
 
     it("tolerates chunks without candidates", async () => {
@@ -565,41 +565,57 @@ describe("estimateGeminiCost", () => {
     vi.restoreAllMocks();
   });
 
-  it("prices flash cheaply and pro higher", () => {
-    const flash = estimateGeminiCost("gemini-1.5-flash", 1000, 1000);
-    const pro = estimateGeminiCost("gemini-1.5-pro", 1000, 1000);
-    expect(flash).toBeGreaterThan(0);
-    expect(flash).toBeLessThan(0.001);
+  it("prices flash-lite below flash and flash below pro", () => {
+    const lite = estimateGeminiCost("gemini-3.5-flash-lite", 1000, 1000);
+    const flash = estimateGeminiCost("gemini-3.8-flash", 1000, 1000);
+    const pro = estimateGeminiCost("gemini-3.1-pro-preview", 1000, 1000);
+    expect(lite).toBeGreaterThan(0);
+    expect(flash).toBeGreaterThan(lite);
     expect(pro).toBeGreaterThan(flash);
   });
 
   it("computes per-million-token rates exactly", () => {
-    expect(estimateGeminiCost("gemini-1.5-pro", 1_000_000, 1_000_000)).toBeCloseTo(6.25, 10);
+    expect(estimateGeminiCost("gemini-3.8-flash", 1_000_000, 1_000_000)).toBeCloseTo(4.5, 10);
+    expect(estimateGeminiCost("gemini-3.1-pro-preview", 1_000_000, 1_000_000)).toBeCloseTo(14, 10);
+  });
+
+  it("has pricing for the default model, without falling back", () => {
+    const model = new GeminiGateway({ apiKey: "k", client: { getGenerativeModel: vi.fn() } }).getModel();
+    expect(estimateGeminiCost(model, 1_000_000, 1_000_000)).toBeCloseTo(4.5, 10);
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it("is case-insensitive", () => {
-    expect(estimateGeminiCost("Gemini-1.5-PRO", 1000, 0)).toBe(
-      estimateGeminiCost("gemini-1.5-pro", 1000, 0),
+    expect(estimateGeminiCost("Gemini-3.1-PRO-Preview", 1000, 0)).toBe(
+      estimateGeminiCost("gemini-3.1-pro-preview", 1000, 0),
     );
   });
 
   it("uses prefix matching for unlisted variants without warning", () => {
-    expect(estimateGeminiCost("gemini-1.5-pro-exp-0801", 1_000_000, 0)).toBeCloseTo(1.25, 10);
+    expect(estimateGeminiCost("gemini-3.1-pro-preview-customtools", 1_000_000, 0)).toBeCloseTo(2, 10);
     expect(console.warn).not.toHaveBeenCalled();
   });
 
-  it("falls back to flash pricing with a warning for unknown models", () => {
-    expect(estimateGeminiCost("mystery-model", 1_000_000, 0)).toBeCloseTo(0.075, 10);
-    expect(console.warn).toHaveBeenCalledTimes(1);
+  it("overestimates unknown models with the most expensive known rates and warns", () => {
+    expect(estimateGeminiCost("mystery-model", 1_000_000, 0)).toBeCloseTo(2, 10);
+    expect(estimateGeminiCost("mystery-model", 0, 1_000_000)).toBeCloseTo(12, 10);
+    expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("never prices an unknown model below a known one", () => {
+    const unknown = estimateGeminiCost("mystery-model", 1000, 1000);
+    for (const known of ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"]) {
+      expect(unknown).toBeGreaterThanOrEqual(estimateGeminiCost(known, 1000, 1000));
+    }
   });
 
   it("does not resolve Object.prototype names as models", () => {
-    expect(estimateGeminiCost("constructor", 1_000_000, 0)).toBeCloseTo(0.075, 10);
-    expect(estimateGeminiCost("__proto__", 1_000_000, 0)).toBeCloseTo(0.075, 10);
+    expect(estimateGeminiCost("constructor", 1_000_000, 0)).toBeCloseTo(2, 10);
+    expect(estimateGeminiCost("__proto__", 1_000_000, 0)).toBeCloseTo(2, 10);
   });
 
   it("is zero for zero tokens", () => {
-    expect(estimateGeminiCost("gemini-1.5-pro", 0, 0)).toBe(0);
+    expect(estimateGeminiCost("gemini-3.8-flash", 0, 0)).toBe(0);
   });
 });
 

@@ -17,7 +17,7 @@
  *
  * const gateway = new GeminiGateway({
  *   apiKey: "your-gemini-api-key",
- *   model: "gemini-1.5-pro",
+ *   model: "gemini-3.8-flash",
  * });
  *
  * const response = await gateway.invokeLlm([
@@ -49,25 +49,32 @@ import {
   RateLimitError,
 } from "../errors.js";
 
-// Gemini pricing per 1M tokens (USD) — as of 2024
-// See: https://ai.google.dev/pricing
+// Gemini pricing per 1M tokens (USD), paid tier, standard text rates for
+// prompts up to 200k tokens. Checked 2026-11-11 against
+// https://ai.google.dev/gemini-api/docs/pricing — keep in sync with GEMINI_PRICING
+// in ../pricing.ts.
 const GEMINI_INTEGRATION_PRICING: Record<string, { input: number; output: number }> = {
-  // Gemini 1.5 Pro
-  "gemini-1.5-pro": { input: 1.25, output: 5.0 },
-  "gemini-1.5-pro-latest": { input: 1.25, output: 5.0 },
-  "gemini-1.5-pro-002": { input: 1.25, output: 5.0 },
-  // Gemini 1.5 Flash
-  "gemini-1.5-flash": { input: 0.075, output: 0.3 },
-  "gemini-1.5-flash-latest": { input: 0.075, output: 0.3 },
-  "gemini-1.5-flash-002": { input: 0.075, output: 0.3 },
-  // Gemini 1.5 Flash-8B (cheapest)
-  "gemini-1.5-flash-8b": { input: 0.0375, output: 0.15 },
-  "gemini-1.5-flash-8b-latest": { input: 0.0375, output: 0.15 },
-  // Gemini 2.0 Flash (experimental)
-  "gemini-2.0-flash-exp": { input: 0.1, output: 0.4 },
-  // Gemini 1.0 Pro (legacy)
-  "gemini-1.0-pro": { input: 0.5, output: 1.5 },
-  "gemini-pro": { input: 0.5, output: 1.5 },
+  // Flash
+  "gemini-3.8-flash": { input: 0.75, output: 3.75 },
+  "gemini-3.6-flash": { input: 0.75, output: 3.75 },
+  // Flash-Lite
+  "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
+  "gemini-3.1-flash-lite": { input: 0.25, output: 1.5 },
+  // Pro
+  "gemini-3.1-pro-preview": { input: 2.0, output: 12.0 },
+};
+
+/** Default model: a current stable Flash model that a new API key can call. */
+const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
+
+/**
+ * Rates for unknown models: the most expensive known input and output rates,
+ * so an unrecognized model is overestimated, never underestimated, and a cost
+ * cap cannot be overspent through it.
+ */
+const UNKNOWN_GEMINI_MODEL_RATES = {
+  input: Math.max(...Object.values(GEMINI_INTEGRATION_PRICING).map((r) => r.input)),
+  output: Math.max(...Object.values(GEMINI_INTEGRATION_PRICING).map((r) => r.output)),
 };
 
 /** Own-property lookup, so model names like "constructor" never hit `Object.prototype`. */
@@ -78,8 +85,8 @@ function hasRates(model: string): boolean {
 /**
  * Estimate cost in USD for a Gemini model.
  *
- * Unknown models fall back to prefix matching, then to flash pricing as a
- * conservative estimate.
+ * Unknown models fall back to prefix matching, then to the most expensive
+ * known rates (with a warning), so the estimate errs high.
  */
 export function estimateGeminiCost(
   model: string,
@@ -87,22 +94,25 @@ export function estimateGeminiCost(
   outputTokens: number,
 ): number {
   // Normalize model name
-  let modelKey = model.toLowerCase();
-  if (!hasRates(modelKey)) {
+  const modelKey = model.toLowerCase();
+  let rates = UNKNOWN_GEMINI_MODEL_RATES;
+  if (hasRates(modelKey)) {
+    rates = GEMINI_INTEGRATION_PRICING[modelKey]!;
+  } else {
     // Try prefix matching
     const match = Object.keys(GEMINI_INTEGRATION_PRICING).find((key) =>
       modelKey.startsWith(key.replace("-latest", "").replace("-002", "")),
     );
     if (match !== undefined) {
-      modelKey = match;
+      rates = GEMINI_INTEGRATION_PRICING[match]!;
     } else {
-      // Unknown model — use flash pricing as conservative estimate
-      console.warn(`identark.integrations.gemini: unknown Gemini model ${model}, using flash pricing`);
-      modelKey = "gemini-1.5-flash";
+      // Unknown model — overestimate with the most expensive known rates
+      console.warn(
+        `identark.integrations.gemini: unknown Gemini model ${model}, using the most expensive known pricing`,
+      );
     }
   }
 
-  const rates = GEMINI_INTEGRATION_PRICING[modelKey]!;
   return (inputTokens * rates.input + outputTokens * rates.output) / 1_000_000;
 }
 
@@ -186,7 +196,7 @@ export interface GeminiClientLike {
 export interface GeminiGatewayOptions {
   /** Your Google AI API key (from https://aistudio.google.com). */
   apiKey: string;
-  /** Gemini model identifier e.g. 'gemini-1.5-pro'. Defaults to 'gemini-1.5-pro'. */
+  /** Gemini model identifier e.g. 'gemini-3.1-pro-preview'. Defaults to 'gemini-3.8-flash'. */
   model?: string;
   /** Optional system instruction prepended to every conversation. */
   systemPrompt?: string;
@@ -242,7 +252,7 @@ export class GeminiGateway implements AgentGateway {
   constructor(options: GeminiGatewayOptions) {
     const {
       apiKey,
-      model = "gemini-1.5-pro",
+      model = DEFAULT_GEMINI_MODEL,
       systemPrompt,
       costCapUsd,
       workspaceDir = "/workspace",
