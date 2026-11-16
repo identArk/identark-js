@@ -151,7 +151,7 @@ export class CredentialExportError extends ControlPlaneError {
 
 /**
  * The credential is not exportable. The gateway can still use it server-side;
- * an org owner can mark it exportable from the dashboard for local development.
+ * an org owner can mark it exportable for local development.
  */
 export class CredentialNotExportableError extends CredentialExportError {
   constructor(message: string, errorCode: string, path: string = "", requiredScope: string | null = null) {

@@ -642,8 +642,7 @@ function credentialExportError(error: ControlPlaneError, path: string): Credenti
   if (error.error_code === "credential_not_exportable") {
     return new CredentialNotExportableError(
       `Credential '${path}' is not exportable. The gateway can use it server-side, but its ` +
-        "plaintext cannot be read back. An org owner can mark it exportable from the dashboard " +
-        "for local development.",
+        "plaintext cannot be read back. An org owner can mark it exportable for local development.",
       error.error_code,
       path,
     );
