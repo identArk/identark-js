@@ -24,6 +24,9 @@ import {
   ContentPolicyError,
   ControlPlaneError,
   CostCapExceededError,
+  CredentialExportError,
+  CredentialNotExportableError,
+  CredentialResolveScopeError,
   NetworkError,
   PathNotAllowedError,
   SessionNotFoundError,
@@ -330,18 +333,38 @@ export class ControlPlaneGateway implements AgentGateway {
   }
 
   /**
-   * Resolve a credential through the control plane for this SDK session.
+   * Export a credential's plaintext from the control plane.
+   *
+   * @deprecated Agents should not hold credentials: let the gateway use them
+   * server-side (`invokeLlm`, `requestCapability`, managed tools). The control
+   * plane now refuses this call unless the API key holds the
+   * `credentials:resolve` scope *and* an org owner has marked the credential
+   * exportable, so it is only useful for local development tooling. The method
+   * keeps its signature and will be removed in a future major release.
    *
    * Structured credentials expose their complete field map on
    * `session.fields`; single-value kinds keep the established `session.value`
    * shape. Treat both as sensitive and never log the returned object.
+   *
+   * @throws {CredentialNotExportableError} the credential is not exportable.
+   * @throws {CredentialResolveScopeError} the key lacks `credentials:resolve`
+   *   or is bound to an agent.
    */
   async resolveCredential(path: string): Promise<CredentialSession> {
+    warnResolveCredentialDeprecated();
     if (!path.trim()) {
       throw new Error("path must not be empty");
     }
     const params = new URLSearchParams({ path });
-    const data = await this._get("/credentials/resolve", params);
+    let data: Record<string, unknown>;
+    try {
+      data = await this._get("/credentials/resolve", params);
+    } catch (error) {
+      if (error instanceof ControlPlaneError && error.status_code === 403) {
+        throw credentialExportError(error, path);
+      }
+      throw error;
+    }
     const rawFields = data.fields;
     return {
       name: String(data.name || ""),
@@ -451,11 +474,12 @@ export class ControlPlaneGateway implements AgentGateway {
           await this._sleep(2 ** (attempt - 1));
         }
       } catch (exc) {
-        // Re-throw client errors immediately — they should never be retried
+        // Re-throw client errors immediately — they should never be retried.
+        // Any ControlPlaneError caught here came from _raise4xx (5xx responses
+        // set lastError instead of throwing), so a plain 403/400 is permanent
+        // too and must not be retried into a NetworkError.
         if (
-          exc instanceof AuthenticationError ||
-          exc instanceof CostCapExceededError ||
-          exc instanceof SessionNotFoundError ||
+          exc instanceof ControlPlaneError ||
           exc instanceof ContentPolicyError ||
           exc instanceof PathNotAllowedError
         ) {
@@ -495,6 +519,14 @@ export class ControlPlaneGateway implements AgentGateway {
       // Ignore JSON parsing errors
     }
 
+    // FastAPI wraps structured errors as {"detail": {...}}; read through it when
+    // the top level carries no error_code of its own.
+    const detail = body.detail;
+    if (detail && typeof detail === "object" && !Array.isArray(detail) && !("error_code" in body)) {
+      const rest = Object.fromEntries(Object.entries(body).filter(([key]) => key !== "detail"));
+      body = { ...(detail as Record<string, unknown>), ...rest };
+    }
+
     const errorCode = (body.error_code as string) || "unknown";
     const message = (body.message as string) || text;
 
@@ -525,7 +557,8 @@ export class ControlPlaneGateway implements AgentGateway {
       throw new ContentPolicyError(message);
     }
 
-    throw new ControlPlaneError(message, status, errorCode);
+    const requiredScope = typeof body.required_scope === "string" ? body.required_scope : null;
+    throw new ControlPlaneError(message, status, errorCode, requiredScope);
   }
 
   private _parseLlmResponse(data: Record<string, unknown>): LLMResponse {
@@ -577,4 +610,61 @@ export class ControlPlaneGateway implements AgentGateway {
   private _sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms * 1000));
   }
+}
+
+const RESOLVE_SCOPE = "credentials:resolve";
+let resolveDeprecationWarned = false;
+
+/** Warn once per process that resolveCredential exports plaintext. */
+function warnResolveCredentialDeprecated(): void {
+  if (resolveDeprecationWarned) return;
+  resolveDeprecationWarned = true;
+  const message =
+    "ControlPlaneGateway.resolveCredential() is deprecated: it exports credential plaintext, " +
+    "which the control plane now allows only for keys holding credentials:resolve and " +
+    "credentials an org owner marked exportable. Let the gateway use credentials server-side instead.";
+  const proc = (globalThis as { process?: { emitWarning?: (msg: string, opts: object) => void } }).process;
+  if (proc && typeof proc.emitWarning === "function") {
+    proc.emitWarning(message, { type: "DeprecationWarning", code: "IDENTARK_RESOLVE_CREDENTIAL" });
+  } else {
+    console.warn(`DeprecationWarning: ${message}`);
+  }
+}
+
+/** @internal Reset the warn-once latch (tests only). */
+export function _resetResolveCredentialDeprecation(): void {
+  resolveDeprecationWarned = false;
+}
+
+/** Map a 403 from /credentials/resolve to a typed, actionable error. */
+function credentialExportError(error: ControlPlaneError, path: string): CredentialExportError {
+  const requiredScope = error.required_scope;
+  if (error.error_code === "credential_not_exportable") {
+    return new CredentialNotExportableError(
+      `Credential '${path}' is not exportable. The gateway can use it server-side, but its ` +
+        "plaintext cannot be read back. An org owner can mark it exportable from the dashboard " +
+        "for local development.",
+      error.error_code,
+      path,
+    );
+  }
+  if (error.error_code === "agent_key_cannot_export") {
+    return new CredentialResolveScopeError(
+      "This API key is bound to an agent and can never export credentials. Use a separate, " +
+        `unbound developer key holding ${RESOLVE_SCOPE}, or sign in with \`identark auth login\`.`,
+      error.error_code,
+      path,
+      requiredScope ?? RESOLVE_SCOPE,
+    );
+  }
+  if (error.error_code === "insufficient_scope" && (requiredScope === null || requiredScope === RESOLVE_SCOPE)) {
+    return new CredentialResolveScopeError(
+      `This API key lacks the ${RESOLVE_SCOPE} scope. It is never implied by org:admin or a ` +
+        "preset; grant it explicitly to a developer key (agent keys cannot hold it).",
+      error.error_code,
+      path,
+      RESOLVE_SCOPE,
+    );
+  }
+  return new CredentialExportError(error.message, error.error_code, path, requiredScope);
 }

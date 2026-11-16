@@ -10,7 +10,10 @@
  * │   ├── ControlPlaneError
  * │   │   ├── AuthenticationError
  * │   │   ├── CostCapExceededError
- * │   │   └── SessionNotFoundError
+ * │   │   ├── SessionNotFoundError
+ * │   │   └── CredentialExportError
+ * │   │       ├── CredentialNotExportableError
+ * │   │       └── CredentialResolveScopeError
  * │   └── NetworkError
  * ├── LLMError
  * │   ├── RateLimitError
@@ -52,12 +55,20 @@ export class ControlPlaneError extends GatewayError {
   readonly status_code: number;
   readonly error_code: string;
   override readonly message: string;
+  /** For a 403 `insufficient_scope`, the scope the key lacks. */
+  readonly required_scope: string | null;
 
-  constructor(message: string, statusCode: number = 0, errorCode: string = "unknown") {
+  constructor(
+    message: string,
+    statusCode: number = 0,
+    errorCode: string = "unknown",
+    requiredScope: string | null = null,
+  ) {
     super(message);
     this.message = message;
     this.status_code = statusCode;
     this.error_code = errorCode;
+    this.required_scope = requiredScope;
     Object.setPrototypeOf(this, ControlPlaneError.prototype);
   }
 }
@@ -117,6 +128,47 @@ export class SessionNotFoundError extends ControlPlaneError {
     super(`Session '${sessionId}' not found or already terminated.`, 404, "session_not_found");
     this.session_id = sessionId;
     Object.setPrototypeOf(this, SessionNotFoundError.prototype);
+  }
+}
+
+/**
+ * The control plane refused to export a credential's plaintext (HTTP 403).
+ *
+ * Brokered credentials are non-exportable by default: the gateway uses them
+ * server-side, and nothing reads them back. Catch this class to handle both
+ * refusal reasons; catch a subclass to tell them apart.
+ */
+export class CredentialExportError extends ControlPlaneError {
+  /** The credential path that was requested. */
+  readonly path: string;
+
+  constructor(message: string, errorCode: string, path: string = "", requiredScope: string | null = null) {
+    super(message, 403, errorCode, requiredScope);
+    this.path = path;
+    Object.setPrototypeOf(this, CredentialExportError.prototype);
+  }
+}
+
+/**
+ * The credential is not exportable. The gateway can still use it server-side;
+ * an org owner can mark it exportable from the dashboard for local development.
+ */
+export class CredentialNotExportableError extends CredentialExportError {
+  constructor(message: string, errorCode: string, path: string = "", requiredScope: string | null = null) {
+    super(message, errorCode, path, requiredScope);
+    Object.setPrototypeOf(this, CredentialNotExportableError.prototype);
+  }
+}
+
+/**
+ * The caller may not export credentials: the API key lacks the
+ * `credentials:resolve` scope (never implied by `org:admin` or a preset), or the
+ * key is bound to an agent, which can never export credentials.
+ */
+export class CredentialResolveScopeError extends CredentialExportError {
+  constructor(message: string, errorCode: string, path: string = "", requiredScope: string | null = null) {
+    super(message, errorCode, path, requiredScope);
+    Object.setPrototypeOf(this, CredentialResolveScopeError.prototype);
   }
 }
 
