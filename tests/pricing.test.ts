@@ -75,9 +75,9 @@ describe("Pricing", () => {
 
     it("should return correct Gemini pricing", async () => {
       const { getPricing } = await loadPricing();
-      const pricing = getPricing("gemini-1.5-flash");
-      expect(pricing?.input).toBe(0.075);
-      expect(pricing?.output).toBe(0.3);
+      const pricing = getPricing("gemini-3.8-flash");
+      expect(pricing?.input).toBe(0.75);
+      expect(pricing?.output).toBe(3.75);
     });
 
     it("should return an empty string model as undefined", async () => {
@@ -102,7 +102,7 @@ describe("Pricing", () => {
       expect(models).toContain("claude-3-5-sonnet-20241022");
       expect(models).toContain("claude-opus-4-20250514");
       expect(models).toContain("mistral-large-latest");
-      expect(models).toContain("gemini-1.5-pro");
+      expect(models).toContain("gemini-3.8-flash");
     });
 
     it("should not include unknown models", async () => {

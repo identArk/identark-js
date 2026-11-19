@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { ControlPlaneGateway } from "../src/gateways/control-plane.js";
+import { ControlPlaneGateway, _resetResolveCredentialDeprecation } from "../src/gateways/control-plane.js";
 import { Message, Role } from "../src/types.js";
 import {
   ConfigurationError,
@@ -8,6 +8,9 @@ import {
   SessionNotFoundError,
   ContentPolicyError,
   ControlPlaneError,
+  CredentialExportError,
+  CredentialNotExportableError,
+  CredentialResolveScopeError,
 } from "../src/errors.js";
 
 // Mock fetch globally
@@ -282,6 +285,125 @@ describe("ControlPlaneGateway", () => {
       expect(session.fields).toEqual({
         host: "db.internal", username: "agent", password: "not-logged", database: "prod",
       });
+    });
+
+    const forbidden = (detail: Record<string, unknown>) => ({
+      ok: false,
+      status: 403,
+      text: async () => JSON.stringify({ detail }),
+    });
+
+    it("is deprecated: warns once per process but keeps working", async () => {
+      _resetResolveCredentialDeprecation();
+      const emit = vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
+      (global.fetch as any)
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ name: "openai", path: "dev/openai", value: "sk-x" }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ name: "openai", path: "dev/openai", value: "sk-x" }) });
+
+      const gateway = new ControlPlaneGateway();
+      const first = await gateway.resolveCredential("dev/openai");
+      await gateway.resolveCredential("dev/openai");
+
+      expect(first.value).toBe("sk-x");
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(String(emit.mock.calls[0]?.[0])).toContain("credentials:resolve");
+      expect(emit.mock.calls[0]?.[1]).toMatchObject({ type: "DeprecationWarning" });
+      emit.mockRestore();
+    });
+
+    it("maps a non-exportable refusal to CredentialNotExportableError", async () => {
+      (global.fetch as any).mockResolvedValueOnce(forbidden({
+        error_code: "credential_not_exportable",
+        message: "This credential is not exportable.",
+        paths: ["prod/openai"],
+      }));
+
+      const gateway = new ControlPlaneGateway();
+      const error = await gateway.resolveCredential("prod/openai").catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CredentialNotExportableError);
+      expect(error).toBeInstanceOf(CredentialExportError);
+      expect(error).toBeInstanceOf(ControlPlaneError);
+      const typed = error as CredentialNotExportableError;
+      expect(typed.status_code).toBe(403);
+      expect(typed.error_code).toBe("credential_not_exportable");
+      expect(typed.path).toBe("prod/openai");
+      expect(typed.message).toContain("not exportable");
+    });
+
+    it("maps a missing credentials:resolve scope to CredentialResolveScopeError", async () => {
+      (global.fetch as any).mockResolvedValueOnce(forbidden({
+        error_code: "insufficient_scope",
+        message: "This API key lacks the required scope: credentials:resolve",
+        required_scope: "credentials:resolve",
+      }));
+
+      const gateway = new ControlPlaneGateway();
+      const error = await gateway.resolveCredential("prod/openai").catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CredentialResolveScopeError);
+      expect((error as CredentialResolveScopeError).required_scope).toBe("credentials:resolve");
+      expect((error as Error).message).toContain("credentials:resolve");
+    });
+
+    it("maps an agent-bound key refusal to CredentialResolveScopeError", async () => {
+      (global.fetch as any).mockResolvedValueOnce(forbidden({
+        error_code: "agent_key_cannot_export",
+        message: "no",
+        required_scope: "credentials:resolve",
+      }));
+
+      const gateway = new ControlPlaneGateway();
+      const error = await gateway.resolveCredential("prod/openai").catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CredentialResolveScopeError);
+      expect((error as CredentialResolveScopeError).error_code).toBe("agent_key_cannot_export");
+      expect((error as Error).message).toContain("bound to an agent");
+    });
+
+    it("leaves other errors untyped", async () => {
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify({ detail: "Invalid path format." }),
+      });
+
+      const gateway = new ControlPlaneGateway();
+      const error = await gateway.resolveCredential("prod/").catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ControlPlaneError);
+      expect(error).not.toBeInstanceOf(CredentialExportError);
+      expect((error as ControlPlaneError).status_code).toBe(400);
+    });
+  });
+
+  describe("error envelope", () => {
+    beforeEach(() => {
+      process.env.IDENTARK_API_KEY = "test-key";
+      process.env.IDENTARK_CONTROL_PLANE_URL = "http://localhost:3000";
+    });
+
+    it("parses error codes inside the {detail: {...}} envelope", async () => {
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        text: async () => JSON.stringify({
+          detail: {
+            error_code: "insufficient_scope",
+            message: "This API key lacks the required scope: audit:read",
+            required_scope: "audit:read",
+          },
+        }),
+      });
+
+      const gateway = new ControlPlaneGateway();
+      const error = await gateway.getSessionCost().catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ControlPlaneError);
+      const typed = error as ControlPlaneError;
+      expect(typed.error_code).toBe("insufficient_scope");
+      expect(typed.required_scope).toBe("audit:read");
+      expect(typed.message).toBe("This API key lacks the required scope: audit:read");
     });
   });
 

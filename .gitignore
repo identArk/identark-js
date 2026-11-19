@@ -16,6 +16,10 @@ dist/
 *~
 .DS_Store
 
+# AI coding agents: local settings can store approved commands verbatim,
+# secrets included (e.g. .claude/settings.local.json). Never commit them.
+.claude/
+
 # Testing
 coverage/
 .nyc_output/

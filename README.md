@@ -377,7 +377,7 @@ try {
 | **OpenAI** | `openai` npm package | `gpt-4o`, `gpt-4-turbo` |
 | **Anthropic** | `@anthropic-ai/sdk` | `claude-3-5-sonnet-20241022` |
 | **Mistral** | OpenAI SDK (base_url) | `mistral-large-latest` |
-| **Ollama** | OpenAI SDK (local) | `llama3.2`, custom models |
+| **Ollama** | OpenAI SDK (local) | `llama3.2` — see [`examples/ollama-local.ts`](./examples/ollama-local.ts) |
 | **vLLM** | OpenAI SDK (base_url) | Any HuggingFace model |
 
 ### Cost Estimation
@@ -400,6 +400,16 @@ IDENTARK_API_KEY               # Outside sandbox (your API key)
 IDENTARK_CONTROL_PLANE_URL     # Control plane endpoint
 IDENTARK_SESSION_ID            # Optional: explicit session ID
 ```
+
+## Examples
+
+Runnable scripts in [`examples/`](./examples):
+
+- [`basic-usage.ts`](./examples/basic-usage.ts) — DirectGateway with OpenAI
+- [`ollama-local.ts`](./examples/ollama-local.ts) — fully local Ollama (`provider: "local"`, $0 cost, no API key)
+- [`control-plane.ts`](./examples/control-plane.ts) — ControlPlaneGateway
+- [`langchain-integration.ts`](./examples/langchain-integration.ts) — LangChain adapter
+- [`vercel-ai-sdk.ts`](./examples/vercel-ai-sdk.ts) — Vercel AI SDK adapter
 
 ## Development
 
