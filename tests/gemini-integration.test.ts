@@ -597,21 +597,38 @@ describe("estimateGeminiCost", () => {
   });
 
   it("overestimates unknown models with the most expensive known rates and warns", () => {
-    expect(estimateGeminiCost("mystery-model", 1_000_000, 0)).toBeCloseTo(2, 10);
-    expect(estimateGeminiCost("mystery-model", 0, 1_000_000)).toBeCloseTo(12, 10);
+    expect(estimateGeminiCost("mystery-model", 1_000_000, 0)).toBeCloseTo(4, 10);
+    expect(estimateGeminiCost("mystery-model", 0, 1_000_000)).toBeCloseTo(20, 10);
     expect(console.warn).toHaveBeenCalledTimes(2);
   });
 
   it("never prices an unknown model below a known one", () => {
     const unknown = estimateGeminiCost("mystery-model", 1000, 1000);
-    for (const known of ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"]) {
+    for (const known of [
+      "gemini-4-carbon",
+      "gemini-4-neon",
+      "gemini-3.8-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-pro-preview",
+    ]) {
       expect(unknown).toBeGreaterThanOrEqual(estimateGeminiCost(known, 1000, 1000));
     }
   });
 
   it("does not resolve Object.prototype names as models", () => {
-    expect(estimateGeminiCost("constructor", 1_000_000, 0)).toBeCloseTo(2, 10);
-    expect(estimateGeminiCost("__proto__", 1_000_000, 0)).toBeCloseTo(2, 10);
+    expect(estimateGeminiCost("constructor", 1_000_000, 0)).toBeCloseTo(4, 10);
+    expect(estimateGeminiCost("__proto__", 1_000_000, 0)).toBeCloseTo(4, 10);
+  });
+
+  it.each([
+    ["gemini-4-carbon", 4, 20],
+    ["gemini-4-argon", 4, 20],
+    ["gemini-4-neon", 3, 15],
+    ["gemini-4-hydrogen", 1.5, 7.5],
+  ])("prices %s from its own entry, without the unknown-model warning", (model, input, output) => {
+    expect(estimateGeminiCost(model, 1_000_000, 0)).toBeCloseTo(input, 10);
+    expect(estimateGeminiCost(model, 0, 1_000_000)).toBeCloseTo(output, 10);
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it("is zero for zero tokens", () => {

@@ -52,7 +52,13 @@ export const MISTRAL_PRICING: Record<string, ModelPricing> = {
 };
 
 export const GEMINI_PRICING: Record<string, ModelPricing> = {
-  // Paid tier, standard text rates (prompts up to 200k tokens), checked 2026-11-11.
+  // Paid tier, standard text rates (prompts up to 200k tokens), checked 2026-11-23.
+  // Gemini 4 Carbon and Argon use the rates from 2026-12-01 ($4 / $20). Until
+  // 2026-11-30 Google charges $2 / $10, so they are overestimated until then.
+  "gemini-4-carbon": { input: 4.0, output: 20.0 },
+  "gemini-4-argon": { input: 4.0, output: 20.0 },
+  "gemini-4-neon": { input: 3.0, output: 15.0 },
+  "gemini-4-hydrogen": { input: 1.5, output: 7.5 },
   "gemini-3.8-flash": { input: 0.75, output: 3.75 },
   "gemini-3.6-flash": { input: 0.75, output: 3.75 },
   "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
