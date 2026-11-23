@@ -50,10 +50,16 @@ import {
 } from "../errors.js";
 
 // Gemini pricing per 1M tokens (USD), paid tier, standard text rates for
-// prompts up to 200k tokens. Checked 2026-11-11 against
+// prompts up to 200k tokens. Checked 2026-11-23 against
 // https://ai.google.dev/gemini-api/docs/pricing — keep in sync with GEMINI_PRICING
 // in ../pricing.ts.
 const GEMINI_INTEGRATION_PRICING: Record<string, { input: number; output: number }> = {
+  // Gemini 4. Carbon and Argon use the rates from 2026-12-01; until 2026-11-30
+  // Google charges $2 / $10, so they are overestimated until then.
+  "gemini-4-carbon": { input: 4.0, output: 20.0 },
+  "gemini-4-argon": { input: 4.0, output: 20.0 },
+  "gemini-4-neon": { input: 3.0, output: 15.0 },
+  "gemini-4-hydrogen": { input: 1.5, output: 7.5 },
   // Flash
   "gemini-3.8-flash": { input: 0.75, output: 3.75 },
   "gemini-3.6-flash": { input: 0.75, output: 3.75 },

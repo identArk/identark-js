@@ -80,6 +80,14 @@ describe("Pricing", () => {
       expect(pricing?.output).toBe(3.75);
     });
 
+    it("should return Gemini 4 pricing at the December 2026 rates", async () => {
+      const { getPricing } = await loadPricing();
+      expect(getPricing("gemini-4-carbon")).toEqual({ input: 4.0, output: 20.0 });
+      expect(getPricing("gemini-4-argon")).toEqual({ input: 4.0, output: 20.0 });
+      expect(getPricing("gemini-4-neon")).toEqual({ input: 3.0, output: 15.0 });
+      expect(getPricing("gemini-4-hydrogen")).toEqual({ input: 1.5, output: 7.5 });
+    });
+
     it("should return an empty string model as undefined", async () => {
       const { getPricing } = await loadPricing();
       expect(getPricing("")).toBeUndefined();
